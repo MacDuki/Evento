@@ -1,0 +1,9 @@
+{
+  "name": "Abstinencia Progresiva",
+  "short_name": "Racha",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#172554",
+  "icons": []
+}

@@ -62,7 +62,9 @@ La creación se realiza con `POST /api/cycles` y requiere:
 ```json
 {
   "minCleanDays": 8,
-  "targetGoalDays": 12
+  "targetGoalDays": 12,
+  "startDate": "2026-10-25",
+  "endDate": "2026-11-06"
 }
 ```
 
@@ -73,7 +75,8 @@ Validaciones:
 3. El mínimo nuevo debe superar estrictamente la máxima pureza histórica de la
    soul.
 4. El número del ciclo se calcula como el último número registrado más uno.
-5. El ciclo comienza en el instante de creación y queda `active`.
+5. El `startDate` no puede ser futuro y el ciclo queda `active`.
+6. No se puede crear otro ciclo si ya existe uno `active` para el usuario.
 
 La interfaz inicializa los campos con mínimo `1` y meta `2`, pero la validación
 definitiva es la del servidor.
@@ -142,7 +145,8 @@ historial.
 ## 5. Cierre normal de ciclo
 
 `POST /api/cycles/:cycleId/finish` solo opera sobre un ciclo activo que
-pertenezca al usuario indicado por `x-user-id`.
+pertenezca al usuario indicado por `x-user-id`. El cierre normal no acepta una
+fecha enviada por el cliente: usa la fecha y hora del servidor.
 
 El servidor:
 
@@ -176,8 +180,10 @@ Si la evaluación continúa:
 ## 6. Admitir consumo
 
 `POST /api/cycles/:cycleId/admit-consumption` representa una admisión
-consciente de consumo y también cierra el ciclo activo. El servidor vuelve a
-calcular los días y aplica la misma evaluación de mínimo, meta y penalización.
+consciente de consumo y también cierra el ciclo activo. Recibe `eventDate` en
+formato `AAAA-MM-DD`; debe ser una fecha válida, no futura y no anterior al
+inicio del ciclo. El servidor calcula los días para esa fecha y aplica la misma
+evaluación de mínimo, meta y penalización.
 
 Si no se supera el mínimo:
 
@@ -209,26 +215,16 @@ La interfaz solicita confirmación antes de enviar esta operación.
 
 Solo una soul viva puede cambiar de nombre.
 
-### Cambiar meta
+### Meta inmutable
 
-`POST /api/soul/goal` cambia `target_goal_days` del ciclo activo y registra
-`goal_changed`.
-
-El endpoint valida que la nueva meta sea un entero positivo y que exista un
-ciclo activo. No vuelve a validar que la nueva meta sea mayor que el mínimo del
-ciclo ni verifica que solo pueda aumentarse. La interfaz solo muestra la acción
-cuando los días limpios ya alcanzaron la meta visible, pero la restricción real
-actual es la validación del endpoint.
+La meta se define al crear el ciclo y no puede editarse después. Si se desea
+otra meta, debe crearse un nuevo ciclo cuando la progresión lo permita.
 
 ## 8. Derrota
 
-La interfaz contiene una función preparada para llamar a
-`POST /api/cycles/:id/admit-defeat` y el README describe esa operación.
-
-En el estado actual relevado no existe ese endpoint en
-[`src/server/app.ts`](./src/server/app.ts). Por lo tanto, admitir derrota no es
-una operación disponible en la API actual. No debe considerarse parte del flujo
-funcional hasta implementar y probar el endpoint.
+No existe un endpoint independiente para admitir derrota. La derrota ocurre
+cuando se cierra un ciclo con `cleanDays <= minCleanDays`, o cuando se admite un
+consumo bajo esa misma condición.
 
 La regla pura sí contempla el resultado de fallo cuando el ciclo no supera el
 mínimo. En ese caso la soul muere y la progresión no continúa automáticamente.
@@ -331,4 +327,3 @@ Cerrar o admitir consumo con cleanDays <= minCleanDays
 - Cliente y flujos de UI: [`src/client/main.tsx`](./src/client/main.tsx)
 - Cola offline: [`src/client/offline.ts`](./src/client/offline.ts)
 - Service worker: [`public/sw.js`](./public/sw.js)
-

@@ -185,12 +185,17 @@ Mi camino
         └── Error: mostrar validación/error y conservar formulario
 ```
 
+El onboarding ofrece dos caminos:
+
+- **Comenzar hoy**: opción principal; el contador empieza con la hora actual del servidor.
+- **Comenzar desde una fecha anterior**: opción secundaria; permite elegir una fecha pasada hasta hoy y calcula el ciclo desde ese día.
+
 Reglas aplicadas por el backend:
 
 - El mínimo debe ser un entero positivo.
-- La meta debe ser un entero positivo mayor que el mínimo.
+- La meta debe ser un entero positivo mayor que el mínimo y queda fija después de crear el ciclo.
 - El mínimo debe superar estrictamente el mínimo del ciclo anterior.
-- El nuevo ciclo comienza con la fecha/hora del servidor.
+- El inicio no puede ser futuro y no puede existir otro ciclo activo.
 
 ### Flujo C: consultar el progreso
 
@@ -225,23 +230,7 @@ Después de una respuesta correcta:
 3. Se vuelve a consultar el estado.
 4. Si corresponde, el servidor puede notificar a los contactos configurados.
 
-### Flujo E: admitir la derrota
-
-Disponible para el ciclo activo desde el historial.
-
-```text
-Admitir
-└── Confirmación nativa
-    ├── Cancelar → no se hace ninguna operación
-    └── Confirmar → POST /api/cycles/:id/admit-defeat
-        ├── Marcar ciclo como fallido
-        ├── Destruir la progresión
-        ├── Registrar auditoría
-        ├── Notificar contactos si está habilitado
-        └── Recargar estado y permitir una nueva secuencia desde la base
-```
-
-### Flujo F: consultar al Coach reflexivo
+### Flujo E: consultar al Coach reflexivo
 
 ```text
 Coach reflexivo
@@ -305,7 +294,7 @@ Las consultas `GET` no se encolan: si fallan, se muestra el error.
 
 - **Drawer de detalles del ciclo:** progreso actual, meta y porcentaje.
 - **Aviso global:** resultado o error de la última operación; se puede cerrar.
-- **Confirmación nativa:** protección antes de admitir la derrota.
+- **Confirmación nativa:** protección antes de admitir un consumo.
 - **Feedback del Coach:** aparece debajo del formulario después de una respuesta.
 - **Estados vacíos:** sin ciclos y sin contactos.
 - **Animaciones:** entrada/salida de vistas, hero, filas del historial y avisos.

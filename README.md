@@ -1,6 +1,6 @@
 # Abstinencia Progresiva
 
-Aplicación local full-stack para probar un sistema de ciclos progresivos. El servidor es la fuente de verdad: calcula días desde timestamps, aplica el incremento estricto, penaliza el déficit y permite admitir la derrota para destruir la progresión.
+Aplicación local full-stack para probar un sistema de ciclos progresivos. El servidor es la fuente de verdad: calcula días desde timestamps, aplica el incremento estricto y penaliza el déficit.
 
 ## Ejecutar
 
@@ -25,9 +25,9 @@ npm run build
 
 - `POST /api/users`: crea un perfil local.
 - `GET /api/state`: requiere `x-user-id`.
-- `POST /api/cycles`: crea un ciclo; `minCleanDays` debe superar el mínimo anterior y `targetGoalDays` el mínimo.
-- `POST /api/cycles/:id/finish`: calcula días limpios y cierra el ciclo con éxito, déficit o fallo.
-- `POST /api/cycles/:id/admit-defeat`: destruye la progresión y registra la derrota.
+- `POST /api/cycles`: crea un ciclo; requiere `minCleanDays`, `targetGoalDays`, `startDate` y `endDate`. La meta debe ser mayor que el mínimo, el inicio no puede ser futuro, la soul debe estar viva y no puede haber otro ciclo activo.
+- `POST /api/cycles/:id/finish`: calcula los días limpios con la hora del servidor y cierra el ciclo con éxito, déficit o fallo.
+- `POST /api/cycles/:id/admit-consumption`: registra un consumo en una fecha no futura del ciclo y lo cierra aplicando las mismas reglas.
 - `POST /api/coach/reflection`: obtiene feedback opcional de OpenAI y lo audita.
 - `POST /api/contacts`: registra un contacto de responsabilidad.
 
@@ -35,7 +35,7 @@ npm run build
 
 Después de crear el perfil local, la barra de navegación expone todas las capacidades del backend:
 
-- **Ciclos**: crear, consultar, cerrar/evaluar y admitir derrota.
+- **Ciclos**: crear, consultar, cerrar/evaluar y admitir consumo. La meta queda fija después de crear el ciclo.
 - **Coach Reflexivo**: enviar una reflexión a `POST /api/coach/reflection`.
 - **Contactos**: añadir y consultar contactos de responsabilidad mediante `POST /api/contacts` y `GET /api/state`.
 
@@ -43,7 +43,7 @@ El estado de la API se muestra junto al perfil como “API conectada” o “API
 
 ## Reglas
 
-Si se alcanza la meta, el siguiente mínimo es `cleanDays + 1`. Si se supera el mínimo pero no la meta, `deficit = target - cleanDays` y el siguiente mínimo es mayor que `cleanDays + deficit`. Si no se alcanza el mínimo o se admite la derrota, el ciclo falla y la siguiente secuencia puede comenzar desde un mínimo base de 1.
+Si se alcanza la meta, el siguiente mínimo es `cleanDays + 1`. Si se supera el mínimo pero no la meta, `deficit = target - cleanDays` y el siguiente mínimo es mayor que `cleanDays + deficit`. Si no se alcanza el mínimo o se admite un consumo sin superar el mínimo, el ciclo falla y no se crea otro ciclo automáticamente.
 
 La IA no modifica estados ni cálculos. SMTP y Web Push solo se activan con sus variables explícitas. Los secretos deben vivir en `.env`.
 

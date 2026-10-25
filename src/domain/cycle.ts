@@ -43,6 +43,8 @@ export function evaluateCycle(input: CycleInput): CycleOutcome {
 }
 
 export function validateNewCycle(minCleanDays: number, targetGoalDays: number, previousMaxPurity: number): void {
+  if (!Number.isInteger(minCleanDays) || minCleanDays < 1) throw new Error("El mínimo debe ser un entero positivo");
+  if (!Number.isInteger(targetGoalDays) || targetGoalDays <= minCleanDays) throw new Error("La meta debe ser mayor que el mínimo");
+  if (!Number.isInteger(previousMaxPurity) || previousMaxPurity < 0) throw new Error("La pureza histórica debe ser un entero no negativo");
   if (minCleanDays <= previousMaxPurity) throw new Error("El mínimo debe superar estrictamente la mayor pureza alcanzada");
-  if (targetGoalDays < 1) throw new Error("La meta adicional debe ser positiva");
 }

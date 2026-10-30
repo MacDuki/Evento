@@ -1,6 +1,9 @@
 import {
-  ArrowUpRight, HeartHandshake, Home,
-  ImagePlus, MessageCircle, Plus, Sparkles, Trash2, UserRound, Users, X
+  AlertTriangle, ArrowUpRight, CalendarDays, Check, CheckCircle2, ChevronLeft,
+  CircleDashed, CircleX, Clock3, Edit3, HeartPulse, Home, ImagePlus,
+  LoaderCircle, Mail, Maximize2, MessageCircle, Minimize2, Palette, Plus,
+  RotateCcw, Send, SlidersHorizontal, Sparkles, Trash2, Trophy, UserRound,
+  Users, Waves, Wind, X
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import React, { useEffect, useMemo, useState } from "react";
@@ -25,19 +28,26 @@ const orbPalettes: Record<OrbPalette, { label: string; one: string; two: string;
   violet: { label: "Violeta", one: "#e5b7ff", two: "#7138a8", three: "#d396ff80", four: "#612b9580", five: "#d19aff40" }
 };
 const statusLabels: Record<string, string> = { active: "En curso", completed: "Completado", failed: "Fallido" };
-const navItems: { id: View; label: string; short: string; icon: typeof Home }[] = [
-  { id: "dashboard", label: "Mi camino", short: "Camino", icon: Home },
-  { id: "soul", label: "Gestionar soul", short: "Soul", icon: Sparkles },
-  { id: "coach", label: "Coach reflexivo", short: "Coach", icon: MessageCircle },
-  { id: "contacts", label: "Red de apoyo", short: "Apoyo", icon: Users },
-  { id: "profile", label: "Mi perfil", short: "Perfil", icon: UserRound }
+const navItems: { id: View; label: string; ariaLabel: string; icon: typeof Home }[] = [
+  { id: "dashboard", label: "Hoy", ariaLabel: "Tu camino", icon: Home },
+  { id: "soul", label: "Soul", ariaLabel: "Tu soul", icon: Sparkles },
+  { id: "coach", label: "Coach", ariaLabel: "Coach", icon: MessageCircle },
+  { id: "contacts", label: "Red", ariaLabel: "Red de apoyo", icon: Users },
+  { id: "profile", label: "Yo", ariaLabel: "Perfil", icon: UserRound }
 ];
-const api = async <T = Record<string, unknown>,>(path: string, options?: RequestInit): Promise<T> => {
+const orbEffects: { id: OrbEffect; label: string; icon: typeof Waves }[] = [
+  { id: "liquid", label: "Líquido", icon: Waves },
+  { id: "calm", label: "Calmo", icon: Wind },
+  { id: "pulse", label: "Pulso", icon: HeartPulse }
+];
+type QueuedResult = { queued: true };
+const isQueued = (value: unknown): value is QueuedResult => Boolean(value && typeof value === "object" && "queued" in value);
+const api = async <T = Record<string, unknown>,>(path: string, options?: RequestInit, queueOnNetworkError = true): Promise<T | QueuedResult> => {
   const request = { headers: { "Content-Type": "application/json", "x-user-id": localStorage.getItem("userId") || "" }, ...options };
   let response: Response;
   try { response = await fetch(`/api${path}`, request); }
   catch (error) {
-    if (options?.method && options.method !== "GET") { enqueue({ path, options: request }); return { queued: true } as T; }
+    if (queueOnNetworkError && options?.method && options.method !== "GET") { enqueue({ path, options: request }); return { queued: true }; }
     throw error;
   }
   const body = await response.text();
@@ -60,11 +70,9 @@ const dateAfter = (days: number) => { const date = new Date(); date.setDate(date
 
 function NoSoul({ onCreate }: { onCreate: () => void }) {
   return <section className="no-soul-state">
-    <div className="no-soul-mark"><Sparkles aria-hidden="true" /></div>
-    <p className="eyebrow">TU ESPACIO ESTÁ LISTO</p>
-    <h2>Crea tu <em>soul.</em></h2>
-    <p>Tu soul aparece cuando defines tu primer ciclo. Puedes comenzar hoy o elegir una fecha de inicio.</p>
-    <button className="primary" type="button" onClick={onCreate}>Crear mi soul <ArrowUpRight aria-hidden="true" /></button>
+    <h2 className="sr-only">Sin ciclo activo</h2>
+    <div className="no-soul-orbit" aria-hidden="true"><Sparkles /><i /><i /></div>
+    <button className="primary empty-primary" type="button" onClick={onCreate}><Plus aria-hidden="true" />Crear</button>
   </section>;
 }
 
@@ -74,22 +82,29 @@ function CycleOnboarding({ soulName, setSoulName, min, setMin, goal, setGoalInpu
   startDate: string; setStartDate: (value: string) => void; endDate: string; setEndDate: (value: string) => void; onFinish: () => void; onExit: () => void;
 }) {
   const [step, setStep] = useState(0);
-  const labels = ["Tu soul", "Mínimo", "Meta", "Fechas"];
+  const labels = ["Soul", "Mínimo", "Meta", "Inicio"];
+  const stepIcons = [Sparkles, CircleDashed, Trophy, CalendarDays];
+  const StepIcon = stepIcons[step];
   const canContinue = step === 0 ? soulName.trim().length > 0 : step === 1 ? Number(min) > 0 : step === 2 ? Number(goal) > Number(min) : startMode === "now" ? Boolean(endDate && endDate >= today()) : Boolean(startDate && startDate <= today());
   const next = () => step < labels.length - 1 ? setStep(step + 1) : onFinish();
   return <main className="onboarding onboarding-flow">
     <div className="brand"><span className="brand-mark">A</span><span>Abstinencia</span></div>
     <section className="onboarding-card">
-      <div className="onboarding-progress"><span>PASO {String(step + 1).padStart(2, "0")} DE 04</span><strong>{labels[step]}</strong><div><i style={{ width: `${((step + 1) / 4) * 100}%` }} /></div></div>
+      <div className="onboarding-progress" aria-label={`Paso ${step + 1} de ${labels.length}: ${labels[step]}`}>
+        <span className="sr-only">Paso {step + 1} de {labels.length}: {labels[step]}</span>
+        <ol>{labels.map((label, index) => <li key={label} className={index <= step ? "is-active" : ""} aria-current={index === step ? "step" : undefined} />)}</ol>
+      </div>
       <AnimatePresence mode="wait">
-        <motion.div key={step} initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -18 }} transition={{ duration: .25, ease: [0.2, 0, 0, 1] }}>
-          {step === 0 && <><p className="eyebrow">PRIMER PASO</p><h1>Nombra el espacio<br /><em>que te acompaña.</em></h1><p className="onboarding-copy">Tu soul será el reflejo de este proceso. Dale un nombre que te resulte cercano.</p><div className="field onboarding-field"><label htmlFor="soul-name">Nombre de tu soul</label><input id="soul-name" autoFocus value={soulName} onChange={event => setSoulName(event.target.value)} placeholder="Por ejemplo, Aurora" /></div></>}
-          {step === 1 && <><p className="eyebrow">SEGUNDO PASO</p><h1>Define tu<br /><em>punto de cuidado.</em></h1><p className="onboarding-copy">¿Cuántos días limpios necesitas para considerar este ciclo superado?</p><div className="field onboarding-field"><label htmlFor="onboarding-min">Mínimo obligatorio</label><div className="input-wrap"><input id="onboarding-min" type="number" min="1" value={min} onChange={event => setMin(event.target.value)} /><span>DÍAS</span></div></div></>}
-          {step === 2 && <><p className="eyebrow">TERCER PASO</p><h1>Elige una meta<br /><em>que te impulse.</em></h1><p className="onboarding-copy">Estos días se suman al mínimo como una meta adicional para este ciclo.</p><div className="field onboarding-field"><label htmlFor="onboarding-goal">Meta adicional</label><div className="input-wrap"><input id="onboarding-goal" type="number" min="1" value={goal} onChange={event => setGoalInput(event.target.value)} /><span>DÍAS</span></div></div></>}
-          {step === 3 && <><p className="eyebrow">ÚLTIMO PASO</p><h1>Empieza<br /><em>con intención.</em></h1><p className="onboarding-copy">La opción principal comienza hoy. Si ya llevas días de proceso, puedes elegir una fecha anterior.</p><div className="onboarding-start-options"><button className={`start-option ${startMode === "now" ? "selected" : ""}`} type="button" onClick={() => { setStartMode("now"); setStartDate(today()); }}><strong>Comenzar hoy</strong><span>El contador empieza ahora.</span></button><button className={`start-option secondary ${startMode === "past" ? "selected" : ""}`} type="button" onClick={() => setStartMode("past")}><strong>Comenzar desde una fecha anterior</strong><span>Registra el inicio real de este proceso.</span></button></div>{startMode === "now" ? <div className="field onboarding-field"><label htmlFor="onboarding-end">Horizonte orientativo</label><input id="onboarding-end" type="date" min={today()} value={endDate} onChange={event => setEndDate(event.target.value)} /><small>Solo es una referencia visual; el servidor calcula los días hasta el momento real.</small></div> : <div className="field onboarding-field"><label htmlFor="onboarding-start">¿Desde qué fecha?</label><input id="onboarding-start" type="date" max={today()} value={startDate} onChange={event => setStartDate(event.target.value)} /><small>El ciclo se calculará desde esa fecha hasta hoy.</small></div>}</>}
+        <motion.div className="onboarding-step" key={step} initial={{ opacity: 0, x: 18, scale: .985 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -12, scale: .985 }} transition={{ duration: .28, ease: [0.2, 0, 0, 1] }}>
+          <div className="onboarding-step-icon" aria-hidden="true"><StepIcon /></div>
+          <h1>{labels[step]}</h1>
+          {step === 0 && <div className="field onboarding-field"><label className="sr-only" htmlFor="soul-name">Nombre de tu soul</label><input id="soul-name" autoFocus value={soulName} onChange={event => setSoulName(event.target.value)} placeholder="Aurora" /></div>}
+          {step === 1 && <div className="field onboarding-field"><label className="sr-only" htmlFor="onboarding-min">Mínimo de días</label><div className="input-wrap"><input id="onboarding-min" aria-label="Mínimo de días" type="number" min="1" value={min} onChange={event => setMin(event.target.value)} /><span>días</span></div></div>}
+          {step === 2 && <div className="field onboarding-field"><label className="sr-only" htmlFor="onboarding-goal">Meta de días</label><div className="input-wrap"><input id="onboarding-goal" aria-label="Meta de días" type="number" min="1" value={goal} onChange={event => setGoalInput(event.target.value)} /><span>días</span></div></div>}
+          {step === 3 && <><div className="onboarding-start-options" role="group" aria-label="Inicio"><button className={`start-option ${startMode === "now" ? "selected" : ""}`} type="button" onClick={() => { setStartMode("now"); setStartDate(today()); }}><Clock3 aria-hidden="true" /><strong>Hoy</strong></button><button className={`start-option secondary ${startMode === "past" ? "selected" : ""}`} type="button" onClick={() => setStartMode("past")}><CalendarDays aria-hidden="true" /><strong>Fecha</strong></button></div><div className="date-reveal"><CalendarDays aria-hidden="true" /><label className="sr-only" htmlFor={startMode === "now" ? "onboarding-end" : "onboarding-start"}>{startMode === "now" ? "Fecha final" : "Fecha inicial"}</label>{startMode === "now" ? <input id="onboarding-end" type="date" min={today()} value={endDate} onChange={event => setEndDate(event.target.value)} /> : <input id="onboarding-start" type="date" max={today()} value={startDate} onChange={event => setStartDate(event.target.value)} />}</div></>}
         </motion.div>
       </AnimatePresence>
-      <div className="onboarding-actions"><button className="quiet-button" type="button" onClick={onExit}>Salir por ahora</button><button className="primary" type="button" disabled={!canContinue} onClick={next}>{step === 3 ? "Crear mi ciclo" : "Continuar"} <ArrowUpRight aria-hidden="true" /></button></div>
+      <div className="onboarding-actions"><button className="icon-action quiet-icon" type="button" title={step === 0 ? "Salir" : "Anterior"} aria-label={step === 0 ? "Salir" : "Anterior"} onClick={() => step === 0 ? onExit() : setStep(current => current - 1)}>{step === 0 ? <X aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}</button><button className="primary onboarding-next" type="button" title={step === 3 ? "Crear ciclo" : "Siguiente"} aria-label={step === 3 ? "Crear ciclo" : "Siguiente"} disabled={!canContinue} onClick={next}>{step === 3 ? <><span>Crear</span><Check aria-hidden="true" /></> : <ArrowUpRight aria-hidden="true" />}</button></div>
     </section>
   </main>;
 }
@@ -97,10 +112,9 @@ function CycleOnboarding({ soulName, setSoulName, min, setMin, goal, setGoalInpu
 function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSettingsChange }: { cycle?: Cycle; cleanDays: number; soulStatus: SoulState["soul_status"]; reaction: SoulReaction; settings: OrbSettings; onSettingsChange: (patch: Partial<OrbSettings>) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [customizing, setCustomizing] = useState(false);
-  const longPressTimer = React.useRef<number | null>(null);
-  const longPressTriggered = React.useRef(false);
   const status = soulStatus === "dead" ? "Soul muerta" : cycle ? "Soul viva" : "Soul nueva";
   const palette = orbPalettes[settings.palette];
+  const progress = cycle ? Math.min(100, Math.round((cleanDays / Math.max(cycle.target_goal_days, 1)) * 100)) : 0;
   const orbStyle = {
     "--color-one": palette.one,
     "--color-two": palette.two,
@@ -108,40 +122,28 @@ function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSettingsChan
     "--color-four": palette.four,
     "--color-five": palette.five,
     "--time-animation": settings.effect === "calm" ? "8s" : settings.effect === "pulse" ? "3s" : "5s",
-    "--size": String(settings.size)
+    "--size": String(settings.size),
+    "--progress": `${progress}%`
   } as React.CSSProperties;
-  const startLongPress = () => {
-    longPressTriggered.current = false;
-    longPressTimer.current = window.setTimeout(() => {
-      longPressTriggered.current = true;
-      setCustomizing(true);
-    }, 1000);
-  };
-  const cancelLongPress = () => {
-    if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current);
-    longPressTimer.current = null;
-  };
-
-  return <section className={`soul-stage ${expanded ? "is-expanded" : ""} ${customizing ? "is-customizing" : ""} select-none`}>
+  return <section className={`soul-stage ${expanded ? "is-expanded" : ""} ${customizing ? "is-customizing" : ""} select-none`} onPointerMove={event => { const bounds = event.currentTarget.getBoundingClientRect(); event.currentTarget.style.setProperty("--pointer-x", `${((event.clientX - bounds.left) / bounds.width) * 100}%`); event.currentTarget.style.setProperty("--pointer-y", `${((event.clientY - bounds.top) / bounds.height) * 100}%`); }}>
+    <header className="soul-stage-header"><h1 className="sr-only">{cycle ? "Tu camino" : "Tu espacio"}</h1><button className="orb-customizer-trigger" type="button" title="Personalizar" aria-label="Personalizar orbe" aria-expanded={customizing} onClick={() => setCustomizing(value => !value)}><SlidersHorizontal aria-hidden="true" /></button></header>
     <AnimatePresence>
-      {customizing && <div className="orb-customizer-popover" aria-label="Personalizar orbe">
+      {customizing && <div className="orb-customizer-popover" role="group" aria-label="Personalizar orbe">
         <motion.div className="orb-float orb-float-color" initial={{ opacity: 0, scale: .4, x: 18, y: 12 }} animate={{ opacity: 1, scale: 1, x: 0, y: 0 }} exit={{ opacity: 0, scale: .4, x: 18, y: 12 }} transition={{ delay: .05, duration: .28 }}>
-          <span>Color</span>
+          <Palette aria-hidden="true" />
           <div className="orb-palette-options" role="radiogroup" aria-label="Color del orbe">
             {(Object.entries(orbPalettes) as [OrbPalette, typeof orbPalettes[OrbPalette]][]).map(([key, palette]) =>
               <button key={key} type="button" className={`orb-palette ${settings.palette === key ? "selected" : ""}`} style={{ "--swatch-one": palette.one, "--swatch-two": palette.two } as React.CSSProperties} aria-label={palette.label} aria-pressed={settings.palette === key} onPointerDown={event => event.stopPropagation()} onClick={() => onSettingsChange({ palette: key })}><span /></button>
             )}
           </div>
         </motion.div>
-        <motion.label className="orb-float orb-float-effect" initial={{ opacity: 0, scale: .4, x: -18, y: 12 }} animate={{ opacity: 1, scale: 1, x: 0, y: 0 }} exit={{ opacity: 0, scale: .4, x: -18, y: 12 }} transition={{ delay: .12, duration: .28 }}>
-          <span>Efecto</span>
-          <select value={settings.effect} onPointerDown={event => event.stopPropagation()} onChange={event => onSettingsChange({ effect: event.target.value as OrbEffect })}><option value="liquid">Líquido</option><option value="calm">Calmo</option><option value="pulse">Pulsante</option></select>
-        </motion.label>
-        <motion.label className="orb-float orb-float-size" initial={{ opacity: 0, scale: .4, y: 18 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .4, y: 18 }} transition={{ delay: .19, duration: .28 }}>
-          <span>Tamaño <strong>{Math.round(settings.size * 100 / 2.2)}%</strong></span>
-          <input type="range" min="1.5" max="3" step="0.1" value={settings.size} onPointerDown={event => event.stopPropagation()} onChange={event => onSettingsChange({ size: Number(event.target.value) })} />
-        </motion.label>
-        <button className="orb-customizer-close" type="button" aria-label="Cerrar personalizador" onPointerDown={event => event.stopPropagation()} onClick={() => setCustomizing(false)}>×</button>
+        <motion.div className="orb-float orb-float-effect" role="group" aria-label="Movimiento" initial={{ opacity: 0, scale: .4, x: -18, y: 12 }} animate={{ opacity: 1, scale: 1, x: 0, y: 0 }} exit={{ opacity: 0, scale: .4, x: -18, y: 12 }} transition={{ delay: .12, duration: .28 }}>
+          {orbEffects.map(effect => { const EffectIcon = effect.icon; return <button key={effect.id} type="button" title={effect.label} aria-label={effect.label} aria-pressed={settings.effect === effect.id} onPointerDown={event => event.stopPropagation()} onClick={() => onSettingsChange({ effect: effect.id })}><EffectIcon aria-hidden="true" /></button>; })}
+        </motion.div>
+        <motion.div className="orb-float orb-float-size" initial={{ opacity: 0, scale: .4, y: 18 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .4, y: 18 }} transition={{ delay: .19, duration: .28 }}>
+          <Minimize2 aria-hidden="true" /><input aria-label="Tamaño del orbe" type="range" min="1.5" max="3" step="0.1" value={settings.size} onPointerDown={event => event.stopPropagation()} onChange={event => onSettingsChange({ size: Number(event.target.value) })} /><Maximize2 aria-hidden="true" />
+        </motion.div>
+        <button className="orb-customizer-close" type="button" aria-label="Cerrar personalizador" onPointerDown={event => event.stopPropagation()} onClick={() => setCustomizing(false)}><X aria-hidden="true" /></button>
       </div>}
     </AnimatePresence>
     <motion.button
@@ -150,21 +152,12 @@ function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSettingsChan
       type="button"
       aria-expanded={expanded}
       aria-label={`${status}, ${cleanDays} días de pureza. ${expanded ? "Ocultar" : "Ver"} estadísticas`}
-      onPointerDown={startLongPress}
-      onPointerUp={cancelLongPress}
-      onPointerLeave={cancelLongPress}
-      onPointerCancel={cancelLongPress}
-      onClick={() => {
-        if (longPressTriggered.current) {
-          longPressTriggered.current = false;
-          return;
-        }
-        setExpanded(value => !value);
-      }}
+      onClick={() => setExpanded(value => !value)}
       whileTap={{ scale: .97 }}
       animate={{ scale: 1 }}
       transition={{ duration: .35, ease: [0.4, 0, 0.2, 1] }}
     >
+      <span className="orb-progress-ring" aria-hidden="true" />
       <span className="soul-orb-loader" aria-hidden="true">
         <svg width="100" height="100" viewBox="0 0 100 100" focusable="false">
           <defs>
@@ -181,16 +174,15 @@ function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSettingsChan
         </svg>
         <span key={`${settings.palette}-${settings.effect}-${settings.size}-${reaction}`} className="soul-orb-box" />
       </span>
+      <span className="orb-readout" aria-hidden="true"><strong>{cleanDays}</strong><small>{cycle ? `/${cycle.target_goal_days}` : ""}</small></span>
     </motion.button>
-    <p className="soul-progress-label">{status} · {cleanDays} días de pureza</p>
     <AnimatePresence initial={false}>
       {expanded && <motion.div className="soul-stats" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .25, ease: [0.2, 0, 0, 1] }}>
-        <div><span>Nivel</span><strong>{cycle?.cycle_number ?? 1}</strong></div>
-        <div><span>Ciclo</span><strong>{cycle?.cycle_number ?? 1}</strong></div>
-        <div><span>Días de pureza</span><strong>{cleanDays}</strong></div>
-        <div><span>Mínimo obligatorio</span><strong>{cycle?.min_clean_days ?? "—"}</strong></div>
-        <div><span>Meta</span><strong>{cycle ? `+${cycle.target_goal_days}` : "—"}</strong></div>
-        <div><span>Inicio</span><strong>{cycle ? formatDate(cycle.start_date) : "Pendiente"}</strong></div>
+        <div title="Ciclo"><CircleDashed aria-hidden="true" /><strong>{cycle?.cycle_number ?? 1}</strong><span className="sr-only">Ciclo {cycle?.cycle_number ?? 1}</span></div>
+        <div title="Máximo"><Trophy aria-hidden="true" /><strong>{cleanDays}</strong><span className="sr-only">Máximo {cleanDays} días</span></div>
+        <div title="Mínimo"><Check aria-hidden="true" /><strong>{cycle?.min_clean_days ?? "—"}</strong><span className="sr-only">Mínimo {cycle?.min_clean_days ?? "—"} días</span></div>
+        <div title="Meta"><Sparkles aria-hidden="true" /><strong>{cycle?.target_goal_days ?? "—"}</strong><span className="sr-only">Meta {cycle?.target_goal_days ?? "—"} días</span></div>
+        <div title={cycle ? `Inicio ${formatDate(cycle.start_date)}` : "Sin inicio"}><CalendarDays aria-hidden="true" /><time dateTime={cycle?.start_date}>{cycle ? formatDate(cycle.start_date) : "—"}</time></div>
       </motion.div>}
     </AnimatePresence>
   </section>;
@@ -200,8 +192,8 @@ function Navigation({ view, setView }: { view: View; setView: (view: View) => vo
   return <nav className="navigation" aria-label="Secciones principales">
     {navItems.map(item => {
       const Icon = item.icon;
-      return <button key={item.id} className={view === item.id ? "selected" : ""} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}>
-        <Icon aria-hidden="true" /><span className="nav-long">{item.label}</span><span className="nav-short">{item.short}</span>
+      return <button key={item.id} type="button" aria-label={item.ariaLabel} className={view === item.id ? "selected" : ""} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}>
+        <Icon aria-hidden="true" /><span className="nav-label">{item.label}</span>
       </button>;
     })}
   </nav>;
@@ -209,6 +201,9 @@ function Navigation({ view, setView }: { view: View; setView: (view: View) => vo
 
 function App() {
   const [userId, setUserId] = useState(localStorage.getItem("userId") || "");
+  const [isLoading, setIsLoading] = useState(Boolean(localStorage.getItem("userId")));
+  const [stateError, setStateError] = useState("");
+  const [pendingAction, setPendingAction] = useState("");
   const [cycles, setCycles] = useState<Cycle[]>([]);
   const [soul, setSoul] = useState<SoulState>({ soul_name: "Soul", soul_status: "alive", soul_max_purity_days: 0 });
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -216,10 +211,16 @@ function App() {
   const [min, setMin] = useState("1"); const [goal, setGoalInput] = useState("2"); const [soulName, setSoulName] = useState("Aurora");
   const [startMode, setStartMode] = useState<"now" | "past">("now");
   const [startDate, setStartDate] = useState(today); const [endDate, setEndDate] = useState(() => dateAfter(7)); const [message, setMessage] = useState("");
+  const [messageKind, setMessageKind] = useState<"success" | "error" | "info">("success");
   const [consumptionDate, setConsumptionDate] = useState(today);
+  const [confirming, setConfirming] = useState<"consumption" | "delete" | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const [onboarding, setOnboarding] = useState(false);
   const [reflection, setReflection] = useState(""); const [feedback, setFeedback] = useState("");
   const [contactName, setContactName] = useState(""); const [contactEmail, setContactEmail] = useState("");
+  const [contactFormOpen, setContactFormOpen] = useState(false);
+  const [expandedContact, setExpandedContact] = useState<string | null>(null);
   const [profilePhoto, setProfilePhoto] = useState(() => localStorage.getItem("abstinencia-profile-photo") || "");
   const [soulReaction, setSoulReaction] = useState<SoulReaction>("idle");
   const [orbSettings, setOrbSettings] = useState<OrbSettings>(() => {
@@ -230,14 +231,22 @@ function App() {
   });
   const activeCycle = useMemo(() => cycles.find(cycle => cycle.status === "active"), [cycles]);
   const cleanDays = activeCycle ? daysSince(activeCycle.start_date) : 0;
+  const NoticeIcon = messageKind === "error" ? AlertTriangle : messageKind === "info" ? CircleDashed : CheckCircle2;
+  const showMessage = (text: string, kind: "success" | "error" | "info" = "success") => { setMessageKind(kind); setMessage(text); };
   const load = () => {
     if (!userId) return;
+    setIsLoading(true); setStateError("");
     void api<{ cycles: Cycle[]; contacts: Contact[]; soul: SoulState }>("/state").then(data => {
+      if (isQueued(data)) return;
       setCycles(data.cycles); setContacts(data.contacts); setSoul(data.soul);
       setOnboarding(data.cycles.length === 0 && localStorage.getItem(`onboarding-exited-${userId}`) !== "true");
-    }).catch(error => setMessage(error.message));
+    }).catch(error => {
+      setStateError(error instanceof Error ? error.message : "No se pudo cargar tu espacio.");
+      showMessage("No se pudo actualizar", "error");
+    }).finally(() => setIsLoading(false));
   };
   useEffect(() => { load(); }, [userId]);
+  useEffect(() => { if (!message) return; const timeout = window.setTimeout(() => setMessage(""), 5000); return () => window.clearTimeout(timeout); }, [message]);
   useEffect(() => {
     if (soulReaction === "idle") return;
     const reactionDuration = soulReaction === "color" ? 3200 : soulReaction === "effect" ? 1400 : soulReaction === "size" ? 1100 : 1400;
@@ -255,101 +264,122 @@ function App() {
     else if (patch.size) setSoulReaction("size");
   }
   async function createUser() {
-    try { const data = await api<{ id: string }>("/users", { method: "POST", body: "{}" }); localStorage.setItem("userId", data.id); setUserId(data.id); setMessage("Tu espacio está listo. Define el primer ciclo."); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo crear el perfil"); }
+    setPendingAction("profile");
+    try {
+      const data = await api<{ id: string }>("/users", { method: "POST", body: "{}" }, false);
+      if (isQueued(data)) throw new Error("Necesitás conexión para crear el espacio.");
+      localStorage.setItem("userId", data.id); setUserId(data.id); showMessage("Espacio listo");
+    }
+    catch { showMessage("No se pudo entrar", "error"); }
+    finally { setPendingAction(""); }
   }
   async function createCycle() {
+    setPendingAction("cycle");
     try {
       const cycleStart = startMode === "now" ? today() : startDate;
       const cycleEnd = startMode === "past" ? today() : endDate;
-      if (!cycleStart || !cycleEnd || cycleEnd < cycleStart) { setMessage("Revisa las fechas del ciclo."); return; }
-      await api("/cycles", { method: "POST", body: JSON.stringify({ minCleanDays: Number(min), targetGoalDays: Number(goal), startDate: cycleStart, endDate: cycleEnd }) });
-      if (soulName.trim()) await api("/soul/name", { method: "POST", body: JSON.stringify({ name: soulName.trim() }) });
+      if (!cycleStart || !cycleEnd || cycleEnd < cycleStart) { showMessage("Revisá las fechas", "error"); return; }
+      const cycleResult = await api("/cycles", { method: "POST", body: JSON.stringify({ minCleanDays: Number(min), targetGoalDays: Number(goal), startDate: cycleStart, endDate: cycleEnd }) });
+      if (isQueued(cycleResult)) { setOnboarding(false); showMessage("Ciclo pendiente", "info"); return; }
+      const nameResult = soulName.trim() ? await api("/soul/name", { method: "POST", body: JSON.stringify({ name: soulName.trim() }) }) : null;
       localStorage.removeItem(`onboarding-exited-${userId}`);
-      setOnboarding(false); setSoulReaction("awakening"); setMessage("Ciclo iniciado. El contador comienza ahora."); load();
+      setOnboarding(false); setSoulReaction("awakening"); showMessage(isQueued(nameResult) ? "Nombre pendiente" : "Ciclo iniciado", isQueued(nameResult) ? "info" : "success"); load();
     }
-    catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo crear el ciclo"); }
+    catch { showMessage("No se pudo crear", "error"); }
+    finally { setPendingAction(""); }
   }
   async function admitConsumption(id: string, eventDate: string) {
-    if (!confirm("Admitir consumir cerrará este ciclo. Si no superaste el mínimo, la soul morirá; si lo superaste, continuará con un mínimo penalizado. ¿Confirmas?")) return;
+    setPendingAction("consumption");
     try {
-      if (!eventDate) { setMessage("Indica la fecha del consumo."); return; }
+      if (!eventDate) { showMessage("Elegí una fecha", "error"); return; }
       const data = await api<{ soulStatus: string; nextMinCleanDays: number | null }>(`/cycles/${id}/admit-consumption`, { method: "POST", body: JSON.stringify({ eventDate }) });
-      setSoulReaction(data.soulStatus === "dead" ? "dead" : "consumption");
-      setMessage(data.soulStatus === "dead" ? "La soul murió. Su historial queda conservado." : `La soul continúa. El próximo mínimo será ${data.nextMinCleanDays}.`);
+      if (isQueued(data)) { showMessage("Registro pendiente", "info"); return; }
+      setConfirming(null); setSoulReaction(data.soulStatus === "dead" ? "dead" : "consumption");
+      showMessage(data.soulStatus === "dead" ? "Soul detenida" : "Registro guardado", data.soulStatus === "dead" ? "error" : "success");
       load();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo registrar el consumo"); }
+    } catch { showMessage("No se pudo registrar", "error"); }
+    finally { setPendingAction(""); }
   }
-  async function renameSoul() {
-    const name = prompt("Nombre de la soul", soul.soul_name)?.trim();
+  async function renameSoul(value = renameValue) {
+    const name = value.trim();
     if (!name) return;
-    try { await api("/soul/name", { method: "POST", body: JSON.stringify({ name }) }); setSoul(value => ({ ...value, soul_name: name })); setSoulReaction("rename"); setMessage("Nombre actualizado."); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo renombrar la soul"); }
+    try { const data = await api("/soul/name", { method: "POST", body: JSON.stringify({ name }) }); if (isQueued(data)) { showMessage("Nombre pendiente", "info"); return; } setSoul(value => ({ ...value, soul_name: name })); setIsRenaming(false); setSoulReaction("rename"); showMessage("Nombre actualizado"); }
+    catch { showMessage("No se pudo cambiar", "error"); }
   }
   async function finish(id: string) {
+    setPendingAction("finish");
     try {
       const data = await api<{ cleanDays: number; status: string; nextMinCleanDays: number | null }>(`/cycles/${id}/finish`, { method: "POST", body: "{}" });
+      if (isQueued(data)) { showMessage("Evaluación pendiente", "info"); return; }
       setSoulReaction(data.status === "failed" ? "dead" : data.nextMinCleanDays && data.nextMinCleanDays > data.cleanDays + 1 ? "progress" : "success");
-      setMessage(`Ciclo cerrado: ${statusLabels[data.status] || data.status}. Lograste ${data.cleanDays} días. Próximo mínimo: ${data.nextMinCleanDays ?? "reinicio base"}.`); load();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo cerrar el ciclo"); }
+      showMessage(data.status === "failed" ? "Ciclo cerrado" : "Meta lograda"); load();
+    } catch { showMessage("No se pudo evaluar", "error"); }
+    finally { setPendingAction(""); }
   }
   async function askCoach() {
-    try { const data = await api<{ feedback: string }>("/coach/reflection", { method: "POST", body: JSON.stringify({ reflection }) }); setFeedback(data.feedback); setMessage("Tu reflexión recibió una perspectiva."); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo consultar al Coach"); }
+    setPendingAction("coach");
+    try { const data = await api<{ feedback: string }>("/coach/reflection", { method: "POST", body: JSON.stringify({ reflection }) }); if (isQueued(data)) { showMessage("Reflexión pendiente", "info"); return; } setFeedback(data.feedback); showMessage("Respuesta lista"); }
+    catch { showMessage("No se pudo consultar", "error"); }
+    finally { setPendingAction(""); }
   }
   async function addContact() {
-    try { await api("/contacts", { method: "POST", body: JSON.stringify({ name: contactName, email: contactEmail }) }); setContactName(""); setContactEmail(""); setMessage("Contacto añadido."); load(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo añadir el contacto"); }
+    setPendingAction("contact");
+    try { const data = await api("/contacts", { method: "POST", body: JSON.stringify({ name: contactName, email: contactEmail }) }); setContactName(""); setContactEmail(""); setContactFormOpen(false); if (isQueued(data)) { showMessage("Contacto pendiente", "info"); return; } showMessage("Contacto añadido"); load(); }
+    catch { showMessage("No se pudo añadir", "error"); }
+    finally { setPendingAction(""); }
   }
   function saveProfilePhoto(file: File) {
-    if (!file.type.startsWith("image/")) { setMessage("Selecciona una imagen válida."); return; }
-    if (file.size > 2_500_000) { setMessage("La foto debe pesar menos de 2,5 MB."); return; }
+    if (!file.type.startsWith("image/")) { showMessage("Imagen no válida", "error"); return; }
+    if (file.size > 2_500_000) { showMessage("Máximo 2,5 MB", "error"); return; }
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result !== "string") { setMessage("No se pudo leer la foto."); return; }
+      if (typeof reader.result !== "string") { showMessage("No se pudo leer", "error"); return; }
       localStorage.setItem("abstinencia-profile-photo", reader.result);
       setProfilePhoto(reader.result);
-      setMessage("Foto de perfil guardada en este dispositivo.");
+      showMessage("Foto guardada");
     };
-    reader.onerror = () => setMessage("No se pudo leer la foto.");
+    reader.onerror = () => showMessage("No se pudo leer", "error");
     reader.readAsDataURL(file);
   }
   async function deleteUserData() {
-    if (!confirm("Se borrará tu historial, contactos, configuración y foto de perfil. Esta acción no se puede deshacer. ¿Continuar?")) return;
+    setPendingAction("delete");
     try {
       await api("/users/me", { method: "DELETE" });
       localStorage.clear();
+      setConfirming(null);
       setUserId("");
       setProfilePhoto("");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo borrar tu información"); }
+    } catch { showMessage("No se pudo borrar", "error"); }
+    finally { setPendingAction(""); }
   }
-  if (!userId) return <main className="onboarding"><div className="brand"><span className="brand-mark">A</span><span>Abstinencia</span></div><section className="welcome"><div className="onboarding-orbit"><span>01</span><i /><i /><i /></div><p className="eyebrow">VOLVER A TI</p><h1>La disciplina<br /><em>en calma.</em></h1><p className="welcome-copy">Un espacio privado para avanzar con intención, un día a la vez.</p><div className="onboarding-meta"><span>01</span><span>Privado · Local</span></div><ShimmerButton className="primary shimmer-cta" background="#19483d" shimmerColor="#e5b66f" onClick={createUser}>Entrar a mi espacio <ArrowUpRight aria-hidden="true" /></ShimmerButton></section></main>;
+  if (!userId) return <main className="onboarding"><div className="brand"><span className="brand-mark">A</span><span>Abstinencia</span></div><section className="welcome"><div className="welcome-orbit" aria-hidden="true"><span /><i /><i /><i /></div><h1>En <em>calma.</em></h1><ShimmerButton className="primary shimmer-cta" background="#19483d" shimmerColor="#e5b66f" disabled={pendingAction === "profile"} onClick={() => void createUser()}>{pendingAction === "profile" ? <LoaderCircle className="spin" aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}<span>Entrar</span></ShimmerButton></section></main>;
+  if (isLoading) return <main className="loading-screen"><div className="brand"><span className="brand-mark">A</span><span>Abstinencia</span></div><section className="loading-stage" aria-live="polite"><span className="loading-orb" aria-hidden="true" /><span className="sr-only">Cargando</span></section></main>;
   if (onboarding) return <CycleOnboarding soulName={soulName} setSoulName={setSoulName} min={min} setMin={setMin} goal={goal} setGoalInput={setGoalInput} startMode={startMode} setStartMode={setStartMode} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} onFinish={createCycle} onExit={() => { localStorage.setItem(`onboarding-exited-${userId}`, "true"); setOnboarding(false); }} />;
   return <main className="app-shell">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">A</span><span>Abstinencia</span></div><Navigation view={view} setView={setView} /></aside>
-    <section className="content"><div className="mobile-nav"><Navigation view={view} setView={setView} /></div>
-      <AnimatePresence mode="wait"><motion.div key={view} className="view-content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .28, ease: [0.2, 0, 0, 1] }}>
+    <a className="skip-link" href="#main-content">Saltar al contenido</a>
+    <section className="content" id="main-content"><div className="mobile-nav"><Navigation view={view} setView={setView} /></div>
+      {stateError ? <section className="state-error" role="alert"><AlertTriangle aria-hidden="true" /><div><strong>Sin conexión</strong><details><summary>Detalle</summary><span>{stateError}</span></details></div><button className="icon-action quiet-icon" type="button" title="Reintentar" aria-label="Reintentar" onClick={load}><RotateCcw aria-hidden="true" /></button></section> : <AnimatePresence mode="wait"><motion.div key={view} className="view-content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .28, ease: [0.2, 0, 0, 1] }}>
         {view === "dashboard" && <section className="dashboard">
-          {activeCycle ? <Soul cycle={activeCycle} cleanDays={cleanDays} soulStatus={soul.soul_status} reaction={soulReaction} settings={orbSettings} onSettingsChange={updateOrbSettings} /> : <NoSoul onCreate={() => setOnboarding(true)} />}
+          {activeCycle ? <><Soul cycle={activeCycle} cleanDays={cleanDays} soulStatus={soul.soul_status} reaction={soulReaction} settings={orbSettings} onSettingsChange={updateOrbSettings} /><section className="cycle-primary-action"><div className="next-days" title="Días para la meta"><CalendarDays aria-hidden="true" /><strong>{Math.max(0, activeCycle.target_goal_days - cleanDays)}</strong><span className="sr-only">días para la meta</span></div><button className="primary" type="button" title="Evaluar ciclo" aria-label="Evaluar ciclo" disabled={pendingAction === "finish"} onClick={() => void finish(activeCycle.id)}>{pendingAction === "finish" ? <LoaderCircle className="spin" aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}<span>Evaluar</span></button></section></> : <NoSoul onCreate={() => setOnboarding(true)} />}
         </section>}
         {view === "soul" && <section className="soul-management">
-          <p className="eyebrow">GESTIÓN</p><h2>Cuida tu <em>soul.</em></h2>
-          <p className="management-copy">Aquí puedes cambiar su nombre y admitir un consumo de forma consciente. La meta queda fija al iniciar cada ciclo.</p>
-          <div className="management-status"><span className={`status-pip ${soul.soul_status === "alive" ? "online" : ""}`} /> {soul.soul_status === "alive" ? "Soul viva" : "Soul muerta"} · {soul.soul_max_purity_days} días de pureza máxima</div>
+          <header className="soul-management-head"><div className="soul-identity"><span className={`status-pip ${soul.soul_status === "alive" ? "online" : ""}`} aria-hidden="true" /><h2>{soul.soul_name}</h2><span className="sr-only">{soul.soul_status === "alive" ? "Viva" : "Muerta"}</span></div><div className="management-max" title="Máximo de días"><Trophy aria-hidden="true" /><strong>{soul.soul_max_purity_days}</strong><span className="sr-only">Máximo de {soul.soul_max_purity_days} días</span></div></header>
           {activeCycle && <div className="management-actions">
-            <label className="event-date-field">Fecha del consumo<input type="date" min={activeCycle.start_date.slice(0, 10)} value={consumptionDate} onChange={event => setConsumptionDate(event.target.value)} /></label>
-            <button className="primary" onClick={() => admitConsumption(activeCycle.id, consumptionDate)}>Admitir consumir</button>
-            {soul.soul_status === "alive" && <button className="quiet-button" onClick={renameSoul}>Renombrar soul</button>}
+            <label className="event-date-field" title="Fecha de consumo"><CalendarDays aria-hidden="true" /><span className="sr-only">Fecha de consumo</span><input type="date" min={activeCycle.start_date.slice(0, 10)} value={consumptionDate} onChange={event => setConsumptionDate(event.target.value)} /></label>
+            <button className="icon-action danger-icon" type="button" title="Admitir consumo" aria-label="Admitir consumo" disabled={pendingAction === "consumption"} onClick={() => setConfirming("consumption")}>{pendingAction === "consumption" ? <LoaderCircle className="spin" aria-hidden="true" /> : <AlertTriangle aria-hidden="true" />}</button>
+            {soul.soul_status === "alive" && (isRenaming ? <form className="rename-form" onSubmit={event => { event.preventDefault(); void renameSoul(); }}><label className="sr-only" htmlFor="rename-soul">Nombre</label><input id="rename-soul" value={renameValue} maxLength={40} autoFocus onChange={event => setRenameValue(event.target.value)} /><div><button className="icon-action primary-icon" type="submit" title="Guardar" aria-label="Guardar" disabled={!renameValue.trim()}><Check aria-hidden="true" /></button><button className="icon-action quiet-icon" type="button" title="Cancelar" aria-label="Cancelar" onClick={() => setIsRenaming(false)}><X aria-hidden="true" /></button></div></form> : <button className="icon-action quiet-icon" type="button" title="Renombrar" aria-label="Renombrar" onClick={() => { setRenameValue(soul.soul_name); setIsRenaming(true); }}><Edit3 aria-hidden="true" /></button>)}
           </div>}
-          {!activeCycle && soul.soul_status === "alive" && <button className="primary" type="button" onClick={() => setOnboarding(true)}>Configurar primer ciclo <ArrowUpRight aria-hidden="true" /></button>}
-          <section className="management-history"><h3>Historial de la soul</h3>{cycles.map(cycle => <div className="history-row" key={cycle.id}><span className={`history-index ${cycle.status}`}>{String(cycle.cycle_number).padStart(2, "0")}</span><div className="history-main"><strong>Ciclo {cycle.cycle_number}</strong><span>{cycle.min_clean_days} mínimo · +{cycle.target_goal_days} meta adicional{cycle.planned_end_date ? ` · hasta ${formatDate(cycle.planned_end_date)}` : ""}</span></div><span className={`badge ${cycle.status}`}>{statusLabels[cycle.status] || cycle.status}</span></div>)}</section>
+          {!activeCycle && soul.soul_status === "alive" && <button className="primary new-cycle" type="button" onClick={() => setOnboarding(true)}><Plus aria-hidden="true" />Nuevo ciclo</button>}
+          {cycles.length > 0 && <section className="management-history" aria-label="Historial de ciclos"><h3 className="sr-only">Historial</h3>{cycles.map(cycle => { const StatusIcon = cycle.status === "completed" ? CheckCircle2 : cycle.status === "failed" ? CircleX : CircleDashed; return <div className="history-row" key={cycle.id} aria-label={`Ciclo ${cycle.cycle_number}: ${statusLabels[cycle.status] || cycle.status}`}><span className={`history-index ${cycle.status}`}>{String(cycle.cycle_number).padStart(2, "0")}</span><strong className="history-range">{cycle.min_clean_days}<span aria-hidden="true">→</span>{cycle.target_goal_days}</strong><span className={`history-status ${cycle.status}`} title={statusLabels[cycle.status] || cycle.status}><StatusIcon aria-hidden="true" /><span className="sr-only">{statusLabels[cycle.status] || cycle.status}{cycle.planned_end_date ? `, ${formatDate(cycle.planned_end_date)}` : ""}</span></span></div>; })}</section>}
         </section>}
-        {view === "coach" && <section className="feature-page"><div className="feature-intro"><p className="eyebrow">PAUSA</p><h2>Haz<br /><em>espacio.</em></h2><div className="feature-orbit"><Sparkles /></div></div><section className="reflection-panel"><label htmlFor="reflection">Tu reflexión</label><textarea id="reflection" rows={8} value={reflection} onChange={e => setReflection(e.target.value)} placeholder="Escribe aquí..." /><div className="panel-footer"><span className="character-count">{reflection.length}/10000</span><button className="primary" disabled={!reflection.trim()} onClick={askCoach}>Consultar <ArrowUpRight aria-hidden="true" /></button></div>{feedback && <div className="feedback"><span className="eyebrow">PERSPECTIVA</span><p>{feedback}</p></div>}</section></section>}
-        {view === "contacts" && <section className="feature-page"><div className="feature-intro"><p className="eyebrow">RED DE APOYO</p><h2>Más<br /><em>acompañado.</em></h2><div className="support-constellation"><HeartHandshake /></div></div><section className="support-panel"><div className="contact-form"><div className="field"><label htmlFor="contact-name">Nombre</label><input id="contact-name" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Nombre" /></div><div className="field"><label htmlFor="contact-email">Correo</label><input id="contact-email" type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="correo@ejemplo.com" /></div><button className="primary" disabled={!contactName.trim() || !contactEmail.trim()} onClick={addContact}>Añadir <Plus aria-hidden="true" /></button></div><div className="contact-list"><div className="list-heading"><span>CONTACTOS</span><span>{contacts.length}</span></div>{contacts.length === 0 ? <p className="empty-state">Aún no hay contactos</p> : contacts.map(contact => <div className="contact-row" key={contact.id}><span className="contact-avatar">{contact.contact_name.charAt(0).toUpperCase()}</span><div><strong>{contact.contact_name}</strong><span>{contact.contact_email}</span></div></div>)}</div></section></section>}
-        {view === "profile" && <section className="profile-page"><div className="feature-intro"><p className="eyebrow">TU ESPACIO</p><h2>Mi<br /><em>perfil.</em></h2></div><section className="profile-panel"><div className="profile-photo-row"><div className="profile-avatar">{profilePhoto ? <img src={profilePhoto} alt="Foto de perfil" /> : <UserRound aria-hidden="true" />}</div><div><strong>Foto de perfil</strong><p>Se guarda únicamente en este dispositivo.</p><label className="photo-upload"><ImagePlus aria-hidden="true" /> Subir foto<input type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) saveProfilePhoto(file); event.target.value = ""; }} /></label></div></div><div className="profile-divider" /><div className="profile-danger"><div><strong>Borrar mis datos</strong><p>Elimina tu historial, contactos, ajustes y datos guardados localmente.</p></div><button className="danger-button" onClick={deleteUserData}><Trash2 aria-hidden="true" /> Borrar datos</button></div></section></section>}
-      </motion.div></AnimatePresence>
+        {view === "coach" && <section className="coach-page"><section className="reflection-panel"><div className="composer-sigil" aria-hidden="true"><Sparkles /></div><label className="sr-only" htmlFor="reflection">Tu reflexión</label><textarea id="reflection" rows={8} maxLength={10000} value={reflection} onChange={e => setReflection(e.target.value)} placeholder="Escribí…" /><div className="panel-footer">{reflection.length > 9500 ? <span className="character-count" aria-live="polite">{reflection.length} / 10k</span> : <span />}<button className="primary" type="button" aria-label="Consultar coach" disabled={!reflection.trim() || pendingAction === "coach"} onClick={() => void askCoach()}>{pendingAction === "coach" ? <LoaderCircle className="spin" aria-hidden="true" /> : <Send aria-hidden="true" />}<span>Enviar</span></button></div>{feedback && <details className="feedback" open><summary><Sparkles aria-hidden="true" /><span>Respuesta</span></summary><p>{feedback}</p></details>}</section></section>}
+        {view === "contacts" && <section className="contacts-page"><header className="contacts-top"><div className="contact-cluster" aria-label={`${contacts.length} contactos`}>{contacts.length ? contacts.slice(0, 4).map(contact => <span className="cluster-avatar" key={contact.id}>{contact.contact_name.charAt(0).toUpperCase()}</span>) : <Users aria-hidden="true" />}</div><button className="icon-action primary-icon" type="button" title="Añadir contacto" aria-label="Añadir contacto" aria-expanded={contactFormOpen} onClick={() => setContactFormOpen(value => !value)}>{contactFormOpen ? <X aria-hidden="true" /> : <Plus aria-hidden="true" />}</button></header><AnimatePresence>{contactFormOpen && <motion.form className="contact-form" initial={{ opacity: 0, y: -8, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: .98 }} transition={{ duration: .2, ease: [0.2, 0, 0, 1] }} onSubmit={event => { event.preventDefault(); void addContact(); }}><div className="field"><label className="sr-only" htmlFor="contact-name">Nombre</label><input id="contact-name" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Nombre" /></div><div className="field"><label className="sr-only" htmlFor="contact-email">Correo</label><input id="contact-email" type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="correo@…" /></div><button className="icon-action primary-icon" type="submit" title="Añadir" aria-label="Añadir" disabled={!contactName.trim() || !contactEmail.trim() || pendingAction === "contact"}>{pendingAction === "contact" ? <LoaderCircle className="spin" aria-hidden="true" /> : <Check aria-hidden="true" />}</button></motion.form>}</AnimatePresence><section className="contact-list" aria-label="Contactos">{contacts.length === 0 ? <div className="contact-empty"><Users aria-hidden="true" /><span className="sr-only">No hay contactos</span></div> : contacts.map(contact => { const isExpanded = expandedContact === contact.id; return <button className={`contact-row ${isExpanded ? "is-expanded" : ""}`} type="button" key={contact.id} aria-expanded={isExpanded} aria-label={isExpanded ? `${contact.contact_name}, ${contact.contact_email}` : `Mostrar correo de ${contact.contact_name}`} onClick={() => setExpandedContact(current => current === contact.id ? null : contact.id)}><span className="contact-avatar" aria-hidden="true">{contact.contact_name.charAt(0).toUpperCase()}</span><span className="contact-name">{contact.contact_name}</span><Mail className="contact-mail" aria-hidden="true" /><span className="contact-email">{contact.contact_email}</span></button>; })}</section></section>}
+        {view === "profile" && <section className="profile-page"><section className="profile-panel"><div className="profile-photo-row"><div className="profile-avatar">{profilePhoto ? <img src={profilePhoto} alt="Foto de perfil" /> : <UserRound aria-hidden="true" />}<label className="photo-upload" title="Cambiar foto"><ImagePlus aria-hidden="true" /><span className="sr-only">Cambiar foto</span><input type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) saveProfilePhoto(file); event.target.value = ""; }} /></label></div></div><button className="danger-tile" type="button" onClick={() => setConfirming("delete")}><Trash2 aria-hidden="true" /><span>Borrar</span></button></section></section>}
+      </motion.div></AnimatePresence>}
     </section>
-    {message && <motion.div className="notice" role="status" initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }}><span>{message}</span><button aria-label="Cerrar aviso" onClick={() => setMessage("")}><X /></button></motion.div>}
+    {confirming && <div className="confirm-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) setConfirming(null); }}><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description"><AlertTriangle aria-hidden="true" /><h2 id="confirm-title">{confirming === "delete" ? "Borrar todo" : "Registrar consumo"}</h2><p id="confirm-description">{confirming === "delete" ? "No se puede deshacer." : "Cierra este ciclo."}</p><div className="confirm-actions"><button className="quiet-button" type="button" onClick={() => setConfirming(null)}>Volver</button><button className="danger-button" type="button" disabled={pendingAction !== ""} onClick={() => { if (confirming === "delete") void deleteUserData(); else if (activeCycle) void admitConsumption(activeCycle.id, consumptionDate); }}>{pendingAction && <LoaderCircle className="spin" aria-hidden="true" />}{confirming === "delete" ? "Borrar" : "Registrar"}</button></div></section></div>}
+    {message && <motion.div className={`notice ${messageKind}`} role={messageKind === "error" ? "alert" : "status"} initial={{ opacity: 0, y: -14, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8 }}><NoticeIcon aria-hidden="true" /><span>{message}</span><button type="button" aria-label="Cerrar aviso" onClick={() => setMessage("")}><X aria-hidden="true" /></button></motion.div>}
   </main>;
 }
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);

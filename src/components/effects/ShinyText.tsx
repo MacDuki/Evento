@@ -233,7 +233,7 @@ const ShinyText = ({
     };
 
     const wake = () => {
-      if (raf || !alive) return;
+      if (raf || !alive || document.hidden || !state.visible) return;
       window.clearTimeout(timer);
       timer = 0;
       last = performance.now();
@@ -242,7 +242,7 @@ const ShinyText = ({
 
     const tick = (now: number) => {
       raf = 0;
-      if (!alive) return;
+      if (!alive || document.hidden || !state.visible) return;
       const s = settingsRef.current!;
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
       last = now;
@@ -356,7 +356,18 @@ const ShinyText = ({
       }
       wake();
     });
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+        window.clearTimeout(timer);
+        timer = 0;
+        return;
+      }
+      wake();
+    };
     observer.observe(root);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     root.addEventListener('pointerenter', onEnter);
     root.addEventListener('pointermove', onMove);
@@ -382,6 +393,7 @@ const ShinyText = ({
       cancelAnimationFrame(raf);
       window.clearTimeout(timer);
       observer.disconnect();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       root.removeEventListener('pointerenter', onEnter);
       root.removeEventListener('pointermove', onMove);
       root.removeEventListener('pointerleave', onLeave);

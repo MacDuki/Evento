@@ -1,4 +1,4 @@
-const CACHE = "en-calma-shell-v2";
+const CACHE = "en-calma-shell-v3";
 const scope = self.registration.scope;
 const shell = [scope, new URL("manifest.json", scope).href];
 

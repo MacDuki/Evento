@@ -215,19 +215,6 @@ export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsCha
     >
       <span className="orb-progress-ring" aria-hidden="true" />
       <span className="soul-orb-loader" aria-hidden="true">
-        <svg width="100" height="100" viewBox="0 0 100 100" focusable="false">
-          <defs>
-            <mask id="clipping">
-              <polygon points="0,0 100,0 100,100 0,100" fill="black" />
-              <polygon points="25,25 75,25 50,75" fill="white" />
-              <polygon points="50,25 75,75 25,75" fill="white" />
-              <polygon points="35,35 65,35 50,65" fill="white" />
-              <polygon points="35,35 65,35 50,65" fill="white" />
-              <polygon points="35,35 65,35 50,65" fill="white" />
-              <polygon points="35,35 65,35 50,65" fill="white" />
-            </mask>
-          </defs>
-        </svg>
         <span key={`${settings.palette}-${settings.effect}-${settings.size}-${reaction}`} className="soul-orb-box" />
       </span>
       <span className="orb-readout" aria-hidden="true"><strong>{cleanDays}</strong><small>{cycle?.goalDays ? `/${cycle.goalDays}` : ""}</small></span>

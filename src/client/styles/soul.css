@@ -260,8 +260,6 @@
   opacity: .95;
 }
 .no-soul-orbit .soul-orb-box {
-  mask: url(#clipping);
-  -webkit-mask: url(#clipping);
   animation: soul-juicy-color 8s ease-in-out infinite;
 }
 .empty-primary { align-items: center; gap: 8px; padding-inline: 19px; }

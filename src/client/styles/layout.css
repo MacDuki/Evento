@@ -198,9 +198,7 @@
   --time-animation: 5s;
   --size: 2.2;
   animation: none;
-}
-.soul-orbit:hover {
-  filter: saturate(1.12);
+  -webkit-tap-highlight-color: transparent;
 }
 .soul-orbit.is-dead {
   color: #7b817b;

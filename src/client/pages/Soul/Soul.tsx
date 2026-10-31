@@ -1,18 +1,21 @@
 ﻿import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { CalendarDays, Check, CircleDashed, Maximize2, Minimize2, Palette, SlidersHorizontal, Sparkles, Trophy, Waves, Wind, X } from "lucide-react";
+import { CalendarDays, Check, CheckCircle2, ChevronDown, CircleDashed, CircleX, Maximize2, Minimize2, Palette, SlidersHorizontal, Sparkles, Trophy, Waves, Wind, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { orbEffects, orbPalettes } from "../../constants/app.js";
+import { orbEffects, orbPalettes, statusLabels } from "../../constants/app.js";
 import { formatDate } from "../../utils/dates.js";
-import type { Cycle, OrbPalette, OrbSettings, SoulReaction, SoulState } from "../../types.js";
-export function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSettingsChange }: { cycle?: Cycle; cleanDays: number; soulStatus: SoulState["soul_status"]; reaction: SoulReaction; settings: OrbSettings; onSettingsChange: (patch: Partial<OrbSettings>) => void }) {
+import type { Cycle, OrbPalette, OrbSettings, Soul as SoulType, SoulReaction } from "../../types.js";
+
+export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsChange }: {
+  soul: SoulType; cycle?: Cycle; cleanDays: number; reaction: SoulReaction; settings: OrbSettings; onSettingsChange: (patch: Partial<OrbSettings>) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const orbRef = useRef<HTMLButtonElement>(null);
   const reduceMotion = useReducedMotion();
-  const status = soulStatus === "dead" ? "Soul muerta" : cycle ? "Soul viva" : "Soul nueva";
+  const status = soul.status === "dead" ? "Soul muerta" : cycle ? "Soul viva" : "Soul nueva";
   const palette = orbPalettes[settings.palette];
-  const progress = cycle ? Math.min(100, Math.round((cleanDays / Math.max(cycle.target_goal_days, 1)) * 100)) : 0;
+  const progress = cycle?.goalDays ? Math.min(100, Math.round((cleanDays / Math.max(cycle.goalDays, 1)) * 100)) : 0;
   const orbStyle = {
     "--color-one": palette.one,
     "--color-two": palette.two,
@@ -52,10 +55,10 @@ export function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSetti
     };
   }, [expanded]);
 
-  return <section className={`soul-stage ${expanded ? "is-expanded" : ""} select-none`} onPointerMove={event => { const bounds = event.currentTarget.getBoundingClientRect(); event.currentTarget.style.setProperty("--pointer-x", `${((event.clientX - bounds.left) / bounds.width) * 100}%`); event.currentTarget.style.setProperty("--pointer-y", `${((event.clientY - bounds.top) / bounds.height) * 100}%`); }}>
+  return <section className={`soul-stage ${expanded ? "is-expanded" : ""} select-none`}>
     <motion.button
       ref={orbRef}
-      className={`soul-orbit orb-effect-${settings.effect} ${soulStatus === "dead" ? "is-dead" : ""} reaction-${reaction}`}
+      className={`soul-orbit orb-effect-${settings.effect} ${soul.status === "dead" ? "is-dead" : ""} reaction-${reaction}`}
       style={orbStyle}
       type="button"
       aria-expanded={expanded}
@@ -82,7 +85,7 @@ export function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSetti
         </svg>
         <span key={`${settings.palette}-${settings.effect}-${settings.size}-${reaction}`} className="soul-orb-box" />
       </span>
-      <span className="orb-readout" aria-hidden="true"><strong>{cleanDays}</strong><small>{cycle ? `/${cycle.target_goal_days}` : ""}</small></span>
+      <span className="orb-readout" aria-hidden="true"><strong>{cleanDays}</strong><small>{cycle?.goalDays ? `/${cycle.goalDays}` : ""}</small></span>
     </motion.button>
     {createPortal(<AnimatePresence initial={false}>
       {expanded && <React.Fragment key="soul-sheet">
@@ -98,19 +101,59 @@ export function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSetti
         >
           <span className="soul-sheet-grabber" aria-hidden="true" />
           <header className="soul-sheet-head">
-            <div><span className="soul-sheet-eyebrow">Soul</span><h2 id="soul-sheet-title">Estado del ciclo</h2></div>
+            <div><span className="soul-sheet-eyebrow" title={soul.name}>{soul.name}</span><h2 id="soul-sheet-title">{soul.status === "dead" ? "Memoria de la soul" : "Estado del ciclo"}</h2></div>
             <button ref={closeButtonRef} className="soul-sheet-close" type="button" aria-label="Cerrar panel" onClick={() => setExpanded(false)}><X aria-hidden="true" /></button>
           </header>
           <div className="soul-stats soul-sheet-stats">
-            <div><CircleDashed aria-hidden="true" /><span className="soul-stat-label">Ciclo</span><strong>{cycle?.cycle_number ?? 1}</strong></div>
+            <div><CircleDashed aria-hidden="true" /><span className="soul-stat-label">Ciclo</span><strong>{cycle?.cycleNumber ?? "—"}</strong></div>
             <div><Sparkles aria-hidden="true" /><span className="soul-stat-label">Días limpios</span><strong>{cleanDays}</strong></div>
-            <div><Check aria-hidden="true" /><span className="soul-stat-label">Mínimo</span><strong>{cycle?.min_clean_days ?? "—"}</strong></div>
-            <div><Trophy aria-hidden="true" /><span className="soul-stat-label">Meta</span><strong>{cycle?.target_goal_days ?? "—"}</strong></div>
-            <div className="soul-stat-date"><CalendarDays aria-hidden="true" /><span className="soul-stat-label">Inicio</span><time dateTime={cycle?.start_date}>{cycle ? formatDate(cycle.start_date) : "—"}</time></div>
+            <div><Check aria-hidden="true" /><span className="soul-stat-label">Mínimo</span><strong>{cycle?.minCleanDays ?? "—"}</strong></div>
+            <div><Trophy aria-hidden="true" /><span className="soul-stat-label">Meta</span><strong>{cycle?.goalDays ?? "—"}</strong></div>
+            <div><Trophy aria-hidden="true" /><span className="soul-stat-label">Máximo</span><strong>{soul.maxPurityDays}</strong></div>
+            <div className="soul-stat-date"><CalendarDays aria-hidden="true" /><span className="soul-stat-label">Inicio</span><time dateTime={cycle?.startDate}>{cycle ? formatDate(cycle.startDate) : "—"}</time></div>
           </div>
+          {cycle && cycle.goals.length > 1 && <div className="soul-goal-history" aria-label="Historial de metas">
+            <span>Metas fijadas</span>
+            <div>{cycle.goals.map(goal => <span key={goal.createdAt + goal.days}>{goal.days} días</span>)}</div>
+          </div>}
         </motion.section>
       </React.Fragment>}
     </AnimatePresence>, document.body)}
+  </section>;
+}
+
+export function SoulMemory({ souls }: { souls: SoulType[] }) {
+  const [selected, setSelected] = useState<string | null>(souls[0]?.id ?? null);
+  return <section className="memory-section" aria-labelledby="memory-title">
+    <header className="memory-head">
+      <div><span className="eyebrow">Memoria</span><h3 id="memory-title">Souls que fueron</h3></div>
+      <span className="memory-count" aria-label={`${souls.length} souls archivadas`}>{souls.length}</span>
+    </header>
+    {souls.length === 0
+      ? <p className="memory-empty">Todavía no hay souls archivadas. La memoria aparece cuando una soul muere.</p>
+      : <div className="memory-list">{souls.map(item => {
+        const open = selected === item.id;
+        return <article className={`memory-soul ${open ? "is-open" : ""}`} key={item.id}>
+          <button type="button" className="memory-soul-head" aria-expanded={open} onClick={() => setSelected(open ? null : item.id)}>
+            <span className="memory-soul-mark" aria-hidden="true" />
+            <span className="memory-soul-copy"><strong>{item.name}</strong><span>Máxima pureza {item.maxPurityDays} días{item.diedAt ? ` · ${formatDate(item.diedAt)}` : ""}</span></span>
+            <ChevronDown aria-hidden="true" />
+          </button>
+          {open && <div className="memory-cycles">
+            {item.cycles.length === 0
+              ? <p className="memory-empty">Sin ciclos registrados.</p>
+              : item.cycles.map(cycle => {
+                const StatusIcon = cycle.status === "completed" ? CheckCircle2 : cycle.status === "failed" ? CircleX : CircleDashed;
+                const days = cycle.status === "active" ? cycle.cleanDays : cycle.finalCleanDays ?? cycle.cleanDays;
+                return <div className="memory-cycle" key={cycle.id}>
+                  <span className={`history-index ${cycle.status}`}>{String(cycle.cycleNumber).padStart(2, "0")}</span>
+                  <span className="memory-cycle-copy"><strong>{cycle.minCleanDays} <span aria-hidden="true">→</span> {cycle.goalDays ?? "sin meta"}</strong><span>{statusLabels[cycle.status] || cycle.status} · {days} días · {formatDate(cycle.startDate)}</span></span>
+                  <span className={`history-status ${cycle.status}`} title={statusLabels[cycle.status] || cycle.status}><StatusIcon aria-hidden="true" /><span className="sr-only">{statusLabels[cycle.status] || cycle.status}</span></span>
+                </div>;
+              })}
+          </div>}
+        </article>;
+      })}</div>}
   </section>;
 }
 

@@ -2,251 +2,229 @@
 
 ## 1. Propósito
 
-La aplicación local permite llevar una progresión de ciclos
-de abstinencia. La aplicación registra una `soul` por usuario, mide los días
-transcurridos desde el inicio de cada ciclo y decide si la progresión continúa o
-se rompe.
+La aplicación sostiene una progresión de ciclos de abstinencia organizada alrededor de una **soul**. Una soul vive mientras sus ciclos se cierren con éxito y muere de forma permanente cuando un consumo no supera el mínimo del ciclo.
 
-La regla de negocio vive en el servidor. El frontend muestra el estado y calcula
-datos visuales, pero el servidor es la autoridad para cerrar ciclos, actualizar
-la progresión y cambiar el estado de la `soul`.
+La regla de negocio vive en el servidor. El frontend muestra el estado y calcula datos visuales, pero el servidor es la autoridad para cerrar ciclos, crear el ciclo siguiente y cambiar el estado de la soul.
 
 ## 2. Conceptos principales
 
-### Usuario y soul
+### Usuario
 
-- Cada usuario se crea desde `POST /api/users`.
-- El usuario no tiene autenticación tradicional: el cliente conserva un UUID en
-  `localStorage` y lo envía en el header `x-user-id`.
-- La `soul` comienza con:
-  - nombre: `Soul`;
-  - estado: `alive`;
-  - máxima pureza histórica: `0` días.
-- Una soul viva puede renombrarse.
-- Una soul muerta no puede renombrarse.
-- La máxima pureza se conserva como el mayor número de días alcanzado; nunca
-  disminuye.
+- Se crea con `POST /api/users`.
+- No hay autenticación tradicional: el cliente guarda un UUID en `localStorage` y lo envía en el header `x-user-id`.
+- Un usuario puede tener muchas souls a lo largo del tiempo, pero **solo una viva a la vez**.
+- Los contactos de responsabilidad pertenecen al usuario, no a una soul concreta.
+
+### Soul
+
+Una soul tiene:
+
+- `id`;
+- `name` (1 a 40 caracteres);
+- `status`: `alive` o `dead`;
+- `max_purity_days`: máxima racha histórica persistida;
+- `created_at`;
+- `died_at` (fecha de calendario, solo si murió).
+
+El estado inicial es `alive` y la máxima pureza persistida es `0`. Una soul muerta no puede renombrarse, no puede iniciar ciclos y no puede volver a estar viva. Su historial permanece consultable.
+
+La máxima pureza que muestra la interfaz es:
+
+```text
+max(max_purity_days, díasLimpiosDelCicloActivo)
+```
+
+Así el orbe no queda desactualizado mientras el ciclo sigue abierto. El valor persistido se actualiza al cerrar un ciclo.
 
 ### Ciclo
 
 Un ciclo contiene:
 
-- número secuencial (`cycle_number`);
-- mínimo obligatorio (`min_clean_days`);
-- meta adicional (`target_goal_days`);
-- fecha y hora de inicio (`start_date`);
-- estado: `active`, `completed` o `failed`;
-- déficit acumulado (`deficit_days`);
-- fecha de cierre (`ended_at`).
+- `cycle_number` secuencial dentro de la soul;
+- `min_clean_days` obligatorio;
+- `start_date` (`AAAA-MM-DD`, día de calendario local);
+- `status`: `active`, `completed` o `failed`;
+- `final_clean_days` (días logrados al cerrar);
+- `deficit_days`;
+- `end_reason`: `consumption` cuando corresponde;
+- `ended_at` (fecha de calendario del cierre);
+- `next_cycle_id` cuando se creó un ciclo siguiente.
 
-Solo puede existir un ciclo activo operativo por usuario. El frontend busca el
-primer ciclo con estado `active` y lo usa como ciclo actual.
+Solo puede existir **un ciclo activo por soul**. El primer ciclo se crea junto con la soul.
+
+### Meta
+
+La meta es opcional y vive en `cycle_goals`, no como un campo editable del ciclo. Cada fila registra `goal_days` y `created_at`. La meta vigente es la última fila de ese ciclo.
+
+- Un ciclo puede no tener ninguna meta.
+- Se puede fijar una meta en cualquier momento si no existe.
+- Una meta existente solo puede ampliarse cuando ya fue alcanzada.
+- La nueva meta debe superar los días limpios actuales y el mínimo del ciclo.
+- Todo cambio queda auditado en `cycle_goals` y en `events_log`.
 
 ### Días limpios
 
-Los días limpios no se cargan mediante check-ins. Se calculan desde
-`start_date` hasta el momento de la operación:
+No se cargan check-ins. Se calculan como diferencia de días de calendario:
 
 ```text
-max(0, floor((ahora - start_date) / 86.400.000))
+díasLimpios = max(0, fechaHasta - start_date)
 ```
 
-Por lo tanto, el valor es entero y se redondea hacia abajo. El cliente utiliza
-la misma fórmula para mostrar el contador, pero el resultado que decide el
-estado siempre es el calculado por el servidor.
+El servidor usa la fecha local del servidor para el estado y la fecha elegida por el usuario para registrar un consumo. El cliente usa la misma lógica para mostrar el contador, pero la decisión siempre la toma el servidor.
 
-## 3. Creación de un ciclo
+## 3. Fechas
 
-La creación se realiza con `POST /api/cycles` y requiere:
+- Todas las fechas de negocio son `AAAA-MM-DD` y representan un día completo en la zona local.
+- No se guardan horas en `start_date`, `ended_at`, `died_at` ni en las metas.
+- `created_at` de auditoría sigue siendo un timestamp ISO; no participa de los cálculos de progresión.
+- La diferencia se calcula normalizando ambos días a UTC, de modo que los cambios de horario de verano no alteran el número de días.
+- Una fecha de inicio no puede ser futura.
+- La fecha de consumo debe ser válida, no futura y no anterior al inicio del ciclo.
+
+## 4. Creación de una soul y su primer ciclo
+
+`POST /api/souls` recibe:
 
 ```json
 {
+  "name": "Aurora",
   "minCleanDays": 8,
-  "targetGoalDays": 12,
-  "startDate": "2026-10-25",
-  "endDate": "2026-11-06"
+  "goalDays": 12,
+  "startDate": "2026-10-25"
 }
 ```
 
-Validaciones:
+- `name` es obligatorio.
+- `minCleanDays` es un entero positivo.
+- `goalDays` es opcional. Si existe, debe ser mayor que el mínimo.
+- `startDate` es opcional; por defecto se usa la fecha local actual. No puede ser futura.
+- No puede existir otra soul viva para el usuario.
 
-1. Ambos valores deben ser enteros positivos.
-2. La meta debe ser estrictamente mayor que el mínimo.
-3. El mínimo nuevo debe superar estrictamente la máxima pureza histórica de la
-   soul.
-4. El número del ciclo se calcula como el último número registrado más uno.
-5. El `startDate` no puede ser futuro y el ciclo queda `active`.
-6. No se puede crear otro ciclo si ya existe uno `active` para el usuario.
+La operación es transaccional:
 
-La interfaz inicializa los campos con mínimo `1` y meta `2`, pero la validación
-definitiva es la del servidor.
+1. Inserta la soul viva con máxima pureza `0`.
+2. Inserta el ciclo `1` en estado `active`.
+3. Si hay meta, inserta la primera fila de `cycle_goals`.
+4. Registra `soul_created`.
 
-## 4. Evaluación de un ciclo
+La respuesta incluye la soul completa con sus ciclos y metas. El cliente recarga el estado.
 
-La función pura [`evaluateCycle`](./src/domain/cycle.ts) recibe:
+## 5. Reglas de consumo
 
-- `previousCleanDays`: máxima pureza previa;
-- `minCleanDays`: mínimo del ciclo;
-- `targetGoalDays`: meta del ciclo;
-- `cleanDays`: días transcurridos en el ciclo actual.
+`POST /api/cycles/:cycleId/admit-consumption` es el **único cierre posible** de un ciclo. Recibe:
 
-También valida que:
-
-- `previousCleanDays` sea entero no negativo;
-- `minCleanDays` sea entero positivo;
-- `targetGoalDays` sea entero y mayor que `minCleanDays`;
-- `cleanDays` sea entero no negativo.
-
-### Caso A: se alcanza la meta
-
-Si `cleanDays >= targetGoalDays`:
-
-- el resultado es `completed`;
-- el déficit es `0`;
-- la soul sigue viva;
-- no se calcula un mínimo siguiente dentro de la función (`nextMinCleanDays`
-  es `null`).
-
-El endpoint que cierra el ciclo traduce ese `null` a `cleanDays + 1` para
-crear el próximo ciclo.
-
-### Caso B: se supera el mínimo, pero no la meta
-
-Si `minCleanDays < cleanDays < targetGoalDays`:
-
-```text
-deficitDays = targetGoalDays - cleanDays
-nextMinCleanDays =
-  max(previousCleanDays + 1, cleanDays + deficitDays + 1)
+```json
+{
+  "eventDate": "2026-11-04",
+  "nextGoalAdditionalDays": 2
+}
 ```
 
-El resultado es `completed`, no `failed`, y la soul sigue viva. El siguiente
-ciclo se crea automáticamente con el mínimo penalizado calculado.
+- `eventDate` es obligatoria y debe estar entre `start_date` y la fecha local actual.
+- `nextGoalAdditionalDays` es opcional. Es un entero no negativo que se suma al próximo mínimo para definir la meta del ciclo siguiente. Si se omite o vale `0`, el ciclo siguiente nace sin meta.
 
-Como `cleanDays + deficitDays` equivale a la meta original, el mínimo suele ser
-la meta original más un día. El `max` además garantiza que no se retroceda
-respecto de la máxima pureza histórica.
+El servidor calcula `cleanDays = calendarDaysBetween(start_date, eventDate)` y aplica la función pura [`evaluateConsumption`](./src/domain/cycle.ts):
 
-### Caso C: no se supera el mínimo
+### Caso A: `cleanDays <= minCleanDays`
 
-Si `cleanDays <= minCleanDays`:
+- El ciclo pasa a `failed`.
+- `final_clean_days` guarda los días logrados.
+- `deficit_days = max(0, metaVigente - cleanDays)` (o `0` si no hay meta).
+- La soul pasa a `dead` y `died_at` guarda la fecha del consumo.
+- No se crea un ciclo siguiente.
+- Se registran `consumption_admitted` y `soul_died`.
+- Se intenta notificar a los contactos si la responsabilidad está configurada.
 
-- el resultado es `failed`;
-- la soul muere (`soulDies: true`);
-- no se calcula un mínimo siguiente;
-- el déficit devuelto por la regla pura es `0`.
+La comparación es estricta: llegar exactamente al mínimo **no** alcanza.
 
-El servidor marca el ciclo como `failed`, cambia la soul a `dead` y conserva el
-historial.
+### Caso B: `cleanDays > minCleanDays`
 
-> Nota: la comparación es estricta. Llegar exactamente al mínimo no alcanza:
-> para continuar hay que tener más días que `minCleanDays`.
+- El ciclo pasa a `completed`.
+- `final_clean_days` guarda los días logrados.
+- `deficit_days = max(0, metaVigente - cleanDays)` (o `0` si no hay meta).
+- La soul sigue viva y su máxima pureza se actualiza con `max(valorAnterior, cleanDays)`.
+- Se crea automáticamente el ciclo siguiente.
 
-## 5. Cierre normal de ciclo
+El próximo mínimo es:
 
-`POST /api/cycles/:cycleId/finish` solo opera sobre un ciclo activo que
-pertenezca al usuario indicado por `x-user-id`. El cierre normal no acepta una
-fecha enviada por el cliente: usa la fecha y hora del servidor.
+```text
+próximoMínimo = max(cleanDays, metaVigente o 0) + 1
+```
 
-El servidor:
+El ciclo siguiente:
 
-1. calcula los días limpios;
-2. obtiene la máxima pureza histórica;
-3. evalúa el ciclo con `evaluateCycle`;
-4. ejecuta la actualización principal dentro de una transacción;
-5. actualiza la máxima pureza con el máximo entre el valor anterior y los días
-   del ciclo;
-6. registra un evento de auditoría.
+- empieza en la **fecha del consumo** (`eventDate`);
+- tiene `cycle_number = cycleNumber + 1`;
+- nace `active`;
+- no tiene meta si `nextGoalAdditionalDays` se omite o vale `0`;
+- si `nextGoalAdditionalDays > 0`, recibe una meta igual a `próximoMínimo + nextGoalAdditionalDays`.
 
-Si la evaluación falla:
+La creación del ciclo siguiente ocurre dentro de la misma transacción que el cierre, después de marcar el ciclo actual como cerrado para respetar el índice único de ciclo activo por soul.
 
-- el ciclo se marca `failed`;
+### Ejemplos
+
+| Mínimo | Meta vigente | Días al consumir | Resultado | Próximo mínimo | Meta siguiente con amplitud 2 |
+|---|---|---|---|---|---|
+| 8 | 12 | 10 | Completa, déficit 2 | 13 | 15 |
+| 8 | 12 | 14 | Completa, déficit 0 | 15 | 17 |
+| 8 | 16 (ampliada) | 14 | Completa, déficit 2 | 17 | 19 |
+| 8 | — | 10 | Completa, déficit 0 | 11 | 13 |
+| 8 | 12 | 8 | Falla, muere | — | — |
+
+## 6. Fijar y ampliar metas
+
+`POST /api/cycles/:cycleId/goal` recibe `{ "goalDays": 14 }` y opera solo sobre un ciclo activo de una soul viva del usuario.
+
+La función pura `validateGoal` aplica:
+
+1. `goalDays` debe ser un entero positivo.
+2. Si ya existe una meta y `cleanDays < metaActual`, se rechaza con “Todavía no alcanzaste la meta actual”.
+3. `goalDays` debe ser mayor que `max(cleanDays, minCleanDays)`.
+
+Esto permite dos flujos:
+
+- **Ciclo sin meta:** se puede fijar una meta en cualquier momento, siempre que supere los días actuales y el mínimo.
+- **Ciclo con meta:** la meta solo puede ampliarse después de alcanzarla. Una meta no puede reducirse, retirarse ni cambiarse por otra menor.
+
+Cada cambio inserta una fila en `cycle_goals`. Los cálculos de consumo usan siempre la última meta registrada.
+
+## 7. Muerte y memoria
+
+La muerte es permanente:
+
 - la soul pasa a `dead`;
-- se registra `soul_died`;
-- se intenta notificar a los contactos de responsabilidad;
-- no se crea otro ciclo automáticamente;
-- la respuesta informa `status: "failed"` y `nextMinCleanDays: null`.
+- no puede renombrarse;
+- no puede tener ciclos activos;
+- no se puede “revivir”;
+- todos sus ciclos, metas y eventos se conservan;
+- el usuario puede crear otra soul, pero solo una estará viva a la vez.
 
-Si la evaluación continúa:
+La pantalla Soul muestra una sección **Memoria** con las souls muertas, su máxima pureza, la fecha de muerte y el detalle de sus ciclos. `GET /api/souls/:id` también permite consultar una soul archivada.
 
-- el ciclo se marca `completed`;
-- se guarda el déficit;
-- se registra `cycle_consumed`;
-- se crea automáticamente el siguiente ciclo `active`;
-- el siguiente ciclo conserva el `target_goal_days` del ciclo anterior;
-- la respuesta informa `status: "active"` porque ya existe un nuevo ciclo
-  activo.
+## 8. Renombrar
 
-## 6. Admitir consumo
-
-`POST /api/cycles/:cycleId/admit-consumption` representa una admisión
-consciente de consumo y también cierra el ciclo activo. Recibe `eventDate` en
-formato `AAAA-MM-DD`; debe ser una fecha válida, no futura y no anterior al
-inicio del ciclo. El servidor calcula los días para esa fecha y aplica la misma
-evaluación de mínimo, meta y penalización.
-
-Si no se supera el mínimo:
-
-- la soul pasa a `dead`;
-- el ciclo pasa a `failed`;
-- se registra `consumption_admitted`;
-- se intenta notificar a los contactos;
-- no se crea un ciclo siguiente.
-
-Si se supera el mínimo:
-
-- el ciclo pasa a `completed`;
-- se guarda el déficit;
-- se registra `consumption_admitted`;
-- se crea el ciclo siguiente con el mínimo calculado;
-- la soul sigue viva.
-
-La interfaz solicita confirmación antes de enviar esta operación.
-
-## 7. Metas y nombre de la soul
-
-### Renombrar
-
-`POST /api/soul/name` acepta un nombre:
+`POST /api/souls/:soulId/name` acepta un nombre:
 
 - obligatorio;
 - recortado (`trim`);
-- de entre 1 y 40 caracteres.
+- de 1 a 40 caracteres;
+- solo para una soul viva del usuario.
 
-Solo una soul viva puede cambiar de nombre.
-
-### Meta inmutable
-
-La meta se define al crear el ciclo y no puede editarse después. Si se desea
-otra meta, debe crearse un nuevo ciclo cuando la progresión lo permita.
-
-## 8. Derrota
-
-No existe un endpoint independiente para admitir derrota. La derrota ocurre
-cuando se cierra un ciclo con `cleanDays <= minCleanDays`, o cuando se admite un
-consumo bajo esa misma condición.
-
-La regla pura sí contempla el resultado de fallo cuando el ciclo no supera el
-mínimo. En ese caso la soul muere y la progresión no continúa automáticamente.
+El cambio se audita como `soul_renamed`.
 
 ## 9. Coach reflexivo
 
-`POST /api/coach/reflection` recibe una reflexión de entre 1 y 10.000
-caracteres y devuelve feedback.
+`POST /api/coach/reflection` recibe una reflexión de entre 1 y 10.000 caracteres y devuelve feedback.
 
-- Si existe `OPENAI_API_KEY`, se consulta el modelo configurado en
-  `OPENAI_MODEL` o, por defecto, `gpt-4o-mini`.
-- El prompt pide una respuesta empática, firme, breve y orientada a propósito,
-  templanza y autocontrol.
-- El coach no decide estados, mínimos, déficits ni consecuencias.
-- La reflexión y la respuesta se registran en `events_log`.
-- Si no existe la clave de OpenAI, se devuelve un mensaje fijo de coach no
-  configurado; no se rechaza la operación.
+- Si existe `OPENAI_API_KEY`, se consulta el modelo configurado en `OPENAI_MODEL` o, por defecto, `gpt-4o-mini`.
+- El prompt pide una respuesta empática, firme, breve y orientada a propósito, templanza y autocontrol.
+- El coach no decide estados, mínimos, déficits, metas ni consecuencias.
+- La reflexión y la respuesta se registran en `events_log`, asociadas al ciclo activo si el cliente lo envía.
+- Si no existe la clave de OpenAI, se devuelve un mensaje fijo de coach no configurado; no se rechaza la operación.
 
 ## 10. Red de apoyo y notificaciones
 
-Los contactos se agregan mediante `POST /api/contacts` con nombre no vacío y
-correo válido. Se listan junto con el estado general mediante `GET /api/state`.
+Los contactos se agregan con `POST /api/contacts` con nombre no vacío y correo válido. Se listan en `GET /api/state`.
 
 El correo de responsabilidad solo se intenta cuando:
 
@@ -254,76 +232,81 @@ El correo de responsabilidad solo se intenta cuando:
 - existe al menos un contacto;
 - están configurados `SMTP_HOST`, `SMTP_USER` y `SMTP_PASSWORD`.
 
-Si la responsabilidad está habilitada pero falta configuración SMTP, la
-operación lanza un error. Las notificaciones actuales se disparan al fallar un
-ciclo o al admitir consumo cuando la soul muere.
+En esta versión se intenta notificar cuando un consumo hace morir a la soul. Si la responsabilidad está habilitada pero falta configuración SMTP, la operación de notificación falla y se informa `notificationError`, pero el cierre ya quedó persistido.
 
-Web Push tiene una función de configuración que valida las claves VAPID cuando
-`WEB_PUSH_ENABLED=true`, pero no hay un flujo de envío de notificaciones Push
-conectado a los ciclos en el estado actual.
+Web Push valida las claves VAPID cuando `WEB_PUSH_ENABLED=true`, pero no hay un flujo de envío Push conectado a los ciclos.
 
 ## 11. Persistencia y auditoría
 
-SQLite se inicializa en el archivo de `DATABASE_FILE` o, por defecto,
-`./data/abstinencia.sqlite`. Las relaciones principales son:
+SQLite se inicializa en `DATABASE_FILE` o en `./data/abstinencia.sqlite`.
 
-- `users`: perfil y estado acumulado de la soul;
-- `cycles`: progresión y resultado de cada ciclo;
-- `accountability_contacts`: contactos del usuario;
-- `events_log`: reflexiones, cambios y cierres relevantes;
-- `offline_operations`: estructura preparada para operaciones offline del
-  servidor, actualmente no utilizada por los endpoints relevados.
+Relaciones:
 
-Las tablas relacionadas con usuario tienen borrado en cascada donde está
-declarado. Las transacciones se usan para actualizar de forma conjunta la soul,
-el ciclo siguiente y los eventos de cierre.
+- `users`: perfil local.
+- `souls`: cada soul, viva o muerta; índice único parcial de una viva por usuario.
+- `cycles`: ciclos de cada soul; índice único parcial de un activo por soul; número de ciclo único por soul.
+- `cycle_goals`: historial de metas de cada ciclo.
+- `accountability_contacts`: contactos por usuario.
+- `events_log`: auditoría con referencias opcionales a soul y ciclo.
+- `offline_operations`: estructura preparada para operaciones offline del servidor, no usada por los endpoints actuales.
+
+Las operaciones que cambian la progresión son transaccionales. Las tablas dependientes usan borrado en cascada.
 
 ## 12. Funcionamiento offline
 
-El cliente registra en `localStorage` las solicitudes mutantes que fallan por
-un error de red. Al volver el evento `online`, las reintenta en orden.
+El cliente registra en `localStorage` las solicitudes mutantes que fallan por error de red. Al volver el evento `online`, las reintenta en orden.
 
 - Las solicitudes `GET` no se encolan.
-- Una solicitud que recibe una respuesta HTTP de error no se convierte en
-  éxito ni se encola: el error se propaga.
+- Una respuesta HTTP de error no se convierte en éxito ni se encola: el error se propaga.
 - Si una solicitud reintentada vuelve a fallar, permanece en la cola.
-- El service worker cachea la carcasa de la aplicación y responde con caché
-  para solicitudes `GET` cuando existe.
-- El servidor sigue siendo la autoridad cuando la operación finalmente se
-  procesa.
+- El servidor sigue siendo la autoridad cuando la operación finalmente se procesa.
+- Las operaciones que dependen de un estado que pudo cambiar (por ejemplo, admitir consumo) pueden ser rechazadas al reintentarse; el cliente muestra el error del servidor.
 
 ## 13. Estados y transiciones
 
 ```text
 Usuario nuevo
-  -> soul alive, sin ciclo
+  -> sin souls
 
-Crear ciclo
-  -> ciclo active
-
-Cerrar ciclo con cleanDays >= targetGoalDays
-  -> ciclo completed
-  -> nuevo ciclo active
+Crear soul con primer ciclo
   -> soul alive
+  -> ciclo 1 active
+  -> meta inicial opcional
 
-Cerrar ciclo con minCleanDays < cleanDays < targetGoalDays
-  -> ciclo completed con deficit_days
-  -> nuevo ciclo active con mínimo penalizado
-  -> soul alive
+Fijar meta
+  -> cycle_goals agrega una meta
+  -> la última meta pasa a ser la vigente
 
-Cerrar o admitir consumo con cleanDays <= minCleanDays
+Ampliar meta
+  -> solo si cleanDays >= meta vigente
+  -> la nueva meta supera cleanDays y el mínimo
+
+Admitir consumo con cleanDays <= mínimo
   -> ciclo failed
-  -> soul dead
-  -> sin nuevo ciclo automático
+  -> soul dead (permanente)
+  -> sin ciclo siguiente
+
+Admitir consumo con cleanDays > mínimo
+  -> ciclo completed
+  -> soul alive
+  -> ciclo siguiente active desde eventDate
+  -> próximo mínimo = max(cleanDays, meta vigente o 0) + 1
+  -> meta siguiente opcional según nextGoalAdditionalDays
+
+Crear otra soul después de una muerte
+  -> la soul muerta queda en Memoria
+  -> nueva soul alive con ciclo 1
 ```
 
 ## 14. Archivos de referencia
 
-- Reglas puras y validaciones: [`src/domain/cycle.ts`](./src/domain/cycle.ts)
+- Reglas puras: [`src/domain/cycle.ts`](./src/domain/cycle.ts)
+- Fechas de calendario: [`src/domain/dates.ts`](./src/domain/dates.ts)
 - Pruebas de reglas: [`src/domain/cycle.test.ts`](./src/domain/cycle.test.ts)
+- Pruebas de fechas: [`src/domain/dates.test.ts`](./src/domain/dates.test.ts)
 - Endpoints y transacciones: [`src/server/app.ts`](./src/server/app.ts)
 - Esquema SQLite: [`src/server/db.ts`](./src/server/db.ts)
 - Integraciones de IA, correo y Push: [`src/server/services.ts`](./src/server/services.ts)
-- Cliente y flujos de UI: [`src/client/main.tsx`](./src/client/main.tsx)
+- Cliente: [`src/client/App.tsx`](./src/client/App.tsx)
 - Cola offline: [`src/client/offline.ts`](./src/client/offline.ts)
 - Service worker: [`public/sw.js`](./public/sw.js)

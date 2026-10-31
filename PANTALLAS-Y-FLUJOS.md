@@ -2,313 +2,326 @@
 
 ## Alcance
 
-Este documento describe la interfaz implementada actualmente en `src/client/main.tsx`.
-La aplicación es una SPA: no hay rutas URL ni un router; la pantalla visible se
-determina por el estado local `view` y por la existencia de `userId` en
-`localStorage`.
+Este documento describe la interfaz implementada en `src/client/App.tsx`. La aplicación es una SPA: no hay rutas URL ni router; la pantalla visible se determina por el estado local `view`, por la existencia de `userId` en `localStorage` y por el estado de las souls.
 
 ## Mapa general
 
 ```text
 Sin userId
-└── Onboarding / bienvenida
-    └── Entrar a mi espacio
+└── Bienvenida
+    └── Entrar
         └── Se crea el perfil local
 
 Con userId
+├── Cargando
+├── Onboarding de soul (si no hay souls y no se salió)
 └── App shell
-    ├── Mi camino (dashboard)
-    ├── Coach reflexivo
-    └── Red de apoyo
+    ├── Hoy
+    ├── Soul
+    ├── Coach
+    ├── Red
+    └── Yo
 ```
 
 ## Pantallas
 
-### 1. Onboarding / bienvenida
+### 1. Bienvenida
 
-- **Cuándo aparece:** cuando no existe `localStorage.userId`.
-- **Contenido:**
-  - Nombre accesible “En calma”.
-  - Mensaje de bienvenida: “La disciplina en calma”.
-  - Indicación de espacio privado y local.
-  - CTA **Entrar a mi espacio**.
-- **Flujo de entrada:**
-  1. La persona pulsa **Entrar a mi espacio**.
+- **Cuándo aparece:** no existe `localStorage.userId`.
+- **Contenido:** orbe vacío y CTA **Entrar**.
+- **Flujo:**
+  1. La persona pulsa **Entrar**.
   2. El cliente ejecuta `POST /api/users`.
-  3. Guarda el `id` recibido en `localStorage.userId`.
-  4. Pasa al shell principal y muestra el dashboard.
-  5. Muestra un aviso de confirmación o error.
+  3. Guarda el `id` en `localStorage.userId`.
+  4. Recarga el estado. Si no hay souls, aparece el onboarding.
+
+Si el `userId` guardado ya no existe en la base, `GET /api/state` responde “Usuario no encontrado”. El cliente borra ese identificador y vuelve a la bienvenida sin dejar la pantalla bloqueada.
+
+### 2. Onboarding de soul
+
+Aparece cuando el usuario no tiene ninguna soul y no eligió salir del onboarding. También se abre manualmente al pulsar **Nueva soul** después de una muerte.
+
+Tiene cuatro pasos:
+
+1. **Nombra a tu soul**: nombre obligatorio, máximo 40 caracteres.
+2. **Mínimo de días**: entero positivo obligatorio.
+3. **Meta (opcional)**: puede quedar vacía. Si se completa, debe superar el mínimo.
+4. **Inicio**: **Hoy** o una **Fecha** pasada hasta hoy.
+
+Acciones:
+
+- **Salir** en el primer paso: cierra el onboarding y deja la pantalla Hoy con el orbe vacío.
+- **Anterior**: vuelve un paso.
+- **Crear**: ejecuta `POST /api/souls` y crea la soul y su primer ciclo en una sola operación.
+
+Ya no se pide una fecha final ni se crea el ciclo con un endpoint separado. La meta puede fijarse después.
 
 **Archivos principales:**
 
-- `src/client/main.tsx`: punto de entrada del cliente.
-- `src/client/App.tsx`: creación del perfil y shell de aplicación.
-- `src/client/pages/Onboarding/CycleOnboarding.tsx`: flujo de onboarding.
-- `src/client/styles/layout.css`: estilos de onboarding y layout.
-- `src/components/ui/shimmer-button.tsx`: CTA de entrada.
-- `src/server/app.ts`: endpoint `POST /api/users`.
-- `src/server/db.ts`: persistencia del usuario.
+- `src/client/pages/Onboarding/CycleOnboarding.tsx`
+- `src/client/App.tsx`
+- `src/client/styles/layout.css`
+- `src/client/styles/soul.css`
 
-### 2. App shell / navegación principal
+### 3. Hoy
 
-Es el contenedor común de las vistas autenticadas localmente.
+Es la pantalla inicial. El protagonista es el orbe de la soul.
 
-- Sidebar con:
-  - Marca.
-  - Indicador de “Espacio local”.
-  - Navegación principal.
-  - Estado de conexión: **Sincronizado** o **Sin conexión**.
-  - Texto de acompañamiento.
-- Barra superior con:
-  - Saludo y título de la vista actual.
-  - Estado **Conectado** o **Modo local**.
-- Avisos globales temporales para éxitos y errores.
-- Transición animada entre vistas.
+#### 3.1 Soul viva
 
-#### Navegación disponible
+- Orbe animado con los días limpios.
+- Si hay meta, el orbe muestra `díasLimpios / meta` y un anillo de progreso.
+- Al tocar el orbe se abre el **panel de estado** desde abajo con:
+  - nombre de la soul;
+  - número de ciclo;
+  - días limpios;
+  - mínimo;
+  - meta vigente o “—”;
+  - máxima pureza;
+  - fecha de inicio;
+  - historial de metas si hubo más de una.
+- El panel se cierra con la X, tocando el fondo o con `Escape`.
 
-| Identificador interno | Etiqueta | Destino |
-|---|---|---|
-| `dashboard` | Mi camino | Dashboard de ciclos |
-| `coach` | Coach reflexivo | Reflexión y feedback |
-| `contacts` | Red de apoyo | Contactos de responsabilidad |
+#### 3.2 Soul muerta
 
-> En móvil se renderiza también la navegación compacta. El botón visual
-> **Abrir navegación** existe, pero actualmente no tiene una acción conectada.
+- Orbe muerto, en gris y con animación reducida.
+- Nombre de la última soul muerta.
+- Máxima pureza alcanzada.
+- CTA **Nueva soul**.
+- Enlace **Ver memoria**, que abre la pantalla Soul.
 
-**Archivos principales:**
+#### 3.3 Sin souls
 
-- `src/client/App.tsx`: shell, estados y avisos.
-- `src/client/components/layout/Navigation.tsx`: navegación compartida.
-- `src/client/styles/layout.css`: layout responsive y estilos compartidos.
-- `src/client/offline.ts`: cola de mutaciones offline.
-- `public/sw.js`: service worker registrado por la aplicación.
-- `public/manifest.json`: metadatos PWA.
+- Orbe vacío y CTA **Crear**.
+- Abre el onboarding.
 
-### 3. Mi camino / dashboard
+#### 3.4 Personalización
 
-Es la vista inicial después del onboarding. Carga `GET /api/state` y muestra
-ciclos y contactos del perfil local.
+El panel de personalización permite cambiar:
 
-#### 3.1 Dashboard sin ciclos o sin ciclo activo
+- color del orbe: Ámbar, Bosque, Océano o Violeta;
+- movimiento: Líquido, Calmo o Pulso;
+- tamaño.
 
-- Hero vacío con el mensaje “Empieza aquí”.
-- Formulario **Nuevo ciclo**:
-  - **Mínimo** en días.
-  - **Meta** en días.
-  - Botón **Iniciar**.
-- Archivo **Tu recorrido**:
-  - Estado vacío: “Sin ciclos todavía”.
+Se guarda en `localStorage` bajo `soul-orb-settings`.
 
-#### 3.2 Dashboard con ciclo activo
+### 4. Soul
 
-- Hero del ciclo activo con:
-  - Número de ciclo.
-  - Días limpios calculados desde `start_date`.
-  - Porcentaje de avance hacia la meta.
-  - Fecha de inicio.
-  - Meta.
-  - Días restantes.
-- Acciones:
-  - **Evaluar**: cierra y clasifica el ciclo.
-  - **Coach**: cambia a la vista Coach reflexivo.
-  - **Detalles**: abre un drawer con días limpios, meta y porcentaje.
-- Formulario para iniciar otro ciclo.
-- Historial de ciclos con estado:
-  - **En curso**.
-  - **Completado**.
-  - **Fallido**.
+Es la pantalla de gestión y memoria.
 
-#### 3.3 Historial de ciclos
+#### 4.1 Soul viva
 
-Cada fila muestra:
+- Encabezado con nombre, indicador de estado y máxima pureza.
+- Botón **Personalizar**.
+- Botón de advertencia **Admitir consumo**.
+- Botón **Renombrar**.
+- Fila de meta:
+  - si no hay meta, **Fijar meta**;
+  - si la meta ya fue alcanzada, **Ampliar meta**;
+  - si todavía no fue alcanzada, un texto con la meta actual y la aclaración de que se puede ampliar al alcanzarla.
+- Historial de ciclos de esa soul:
+  - número;
+  - mínimo → meta (o “—”);
+  - días logrados y fecha de inicio;
+  - estado: En curso, Completado o Fallido.
+- Sección **Memoria** con las souls muertas.
 
-- Número del ciclo.
-- Rango mínimo-meta.
-- Estado.
-- Para el ciclo activo:
-  - **Evaluar**.
-  - **Admitir**.
+#### 4.2 Soul muerta
 
-Los ciclos cerrados no muestran acciones de modificación.
+- Encabezado con nombre, indicador apagado y máxima pureza.
+- Aviso de que la soul ya no puede continuar.
+- CTA **Nueva soul**.
+- Historial completo de sus ciclos.
+- Sección **Memoria**.
 
-**Archivos principales:**
+#### 4.3 Modal de consumo
 
-- `src/client/App.tsx`: composición del dashboard, formularios, historial y acciones.
-- `src/client/pages/Soul/Soul.tsx`: visualización y personalización de la soul.
-- `src/client/styles/layout.css`: hero, progreso, formularios e historial.
-- `src/components/ui/drawer.tsx`: panel de detalles del ciclo.
-- `src/server/app.ts`: endpoints de estado y ciclos.
-- `src/domain/cycle.ts`: validación y evaluación de reglas.
-- `src/server/db.ts`: lectura y escritura de ciclos.
+Se abre solo desde el botón de advertencia de la pantalla Soul.
 
-### 4. Coach reflexivo
+Contiene:
 
-La pantalla permite escribir una reflexión y solicitar una perspectiva. Muestra
-el contador, el botón de consulta y el feedback recibido.
+- **Fecha del consumo**: entre el inicio del ciclo y hoy.
+- **Amplitud de la próxima meta (opcional)**: entero no negativo que se suma al próximo mínimo.
+- Texto de ayuda: si se deja vacío, el próximo ciclo empieza sin meta.
+- Acciones **Volver** y **Registrar**.
 
-**Archivos principales:**
+Al confirmar:
 
-- `src/client/App.tsx`: estado, consulta y feedback.
-- `src/client/styles/layout.css`: estilos del panel de reflexión.
-- `src/server/app.ts`: endpoint `POST /api/coach/reflection`.
-- `src/server/services.ts`: integración con OpenAI y fallback local.
-- `src/server/db.ts`: auditoría de la reflexión y respuesta.
+- Éxito: se muestra el próximo mínimo y, si corresponde, la próxima meta.
+- Muerte: se informa que la soul murió y su memoria queda guardada. La pantalla Hoy pasa a mostrar el estado de muerte.
 
-### 5. Red de apoyo
+No existe un botón **Evaluar** ni un cierre sin consumo.
 
-La pantalla permite añadir contactos de responsabilidad y consultar la lista
-existente.
+#### 4.4 Modal de meta
+
+Se abre desde **Fijar meta** o **Ampliar meta**.
+
+- Muestra el número que la nueva meta debe superar.
+- Campo numérico con sugerencia inicial.
+- **Guardar** ejecuta `POST /api/cycles/:id/goal`.
+- El servidor puede rechazar la meta si no cumple las reglas; el error se muestra en el aviso global.
+
+#### 4.5 Memoria
+
+Lista las souls muertas, de la más reciente a la más antigua.
+
+- Cada fila muestra nombre, máxima pureza y fecha de muerte.
+- Al expandir se ven sus ciclos: número, mínimo → meta, estado, días y fecha de inicio.
+- Si no hay souls muertas, se muestra un texto explicativo.
 
 **Archivos principales:**
 
-- `src/client/App.tsx`: composición del formulario y listado de contactos.
-- `src/client/styles/layout.css`: estilos del panel y filas de contactos.
-- `src/server/app.ts`: endpoints de contactos y estado.
-- `src/server/db.ts`: persistencia de contactos.
-- `src/server/services.ts`: notificaciones por correo cuando están habilitadas.
+- `src/client/App.tsx`
+- `src/client/pages/Soul/Soul.tsx`
+- `src/client/components/common/EmptySoul.tsx`
+- `src/client/styles/soul.css`
+- `src/server/app.ts`
+- `src/domain/cycle.ts`
+- `src/domain/dates.ts`
+
+### 5. Coach
+
+Permite escribir una reflexión y pedir una perspectiva.
+
+- Contador de caracteres hasta 10.000.
+- Botón **Enviar** deshabilitado si el texto está vacío o hay una consulta en curso.
+- La reflexión se envía con el ciclo activo, si existe.
+- La respuesta se muestra en un bloque expandible.
+- El coach no modifica estados ni reglas.
+
+### 6. Red
+
+Permite agregar contactos de responsabilidad y consultarlos.
+
+- Botón **+** para abrir el formulario.
+- Campos nombre y correo.
+- La lista muestra avatar con la inicial; al tocar una fila se expande el correo.
+- No hay edición ni eliminación de contactos en esta versión.
+
+### 7. Yo
+
+- Foto de perfil local, guardada en `localStorage` como data URL.
+- Validación de tipo de imagen y tamaño máximo de 2,5 MB.
+- Botón **Borrar** con confirmación. Ejecuta `DELETE /api/users/me`, limpia `localStorage` y vuelve a la bienvenida.
 
 ## Flujos funcionales
 
-### Flujo A: crear el primer perfil local
+### Flujo A: crear el perfil local
+
+```text
+Bienvenida
+└── Entrar
+    ├── Éxito: POST /api/users → guardar userId → cargar estado
+    └── Error: aviso y permanecer en bienvenida
+```
+
+### Flujo B: crear la primera soul y su ciclo
 
 ```text
 Onboarding
-└── Entrar a mi espacio
-    ├── Éxito: POST /api/users → guardar userId → dashboard
-    └── Error: mostrar aviso y permanecer en onboarding
+└── Nombre → Mínimo → Meta opcional → Inicio
+    └── Crear
+        ├── Éxito: POST /api/souls → recargar → orbe vivo
+        └── Error: aviso con el mensaje del servidor
 ```
-
-### Flujo B: iniciar un ciclo
-
-```text
-Mi camino
-└── Completar Mínimo y Meta
-    └── Iniciar
-        ├── Éxito: POST /api/cycles → recargar estado → ciclo activo visible
-        └── Error: mostrar validación/error y conservar formulario
-```
-
-El onboarding ofrece dos caminos:
-
-- **Comenzar hoy**: opción principal; el contador empieza con la hora actual del servidor.
-- **Comenzar desde una fecha anterior**: opción secundaria; permite elegir una fecha pasada hasta hoy y calcula el ciclo desde ese día.
-
-Reglas aplicadas por el backend:
-
-- El mínimo debe ser un entero positivo.
-- La meta debe ser un entero positivo mayor que el mínimo y queda fija después de crear el ciclo.
-- El mínimo debe superar estrictamente el mínimo del ciclo anterior.
-- El inicio no puede ser futuro y no puede existir otro ciclo activo.
 
 ### Flujo C: consultar el progreso
 
 ```text
-Entrada al shell o creación/cierre de ciclo
+Entrada al shell o después de una operación
 └── GET /api/state
-    ├── Actualizar ciclos
-    ├── Actualizar contactos
-    └── Recalcular visualmente días, porcentaje y días restantes
+    ├── soul viva o null
+    ├── todas las souls con sus ciclos y metas
+    ├── contactos
+    └── fecha local del servidor
 ```
 
-Los días limpios no se registran mediante check-ins: se calculan con la
-diferencia entre la fecha actual y `start_date`.
+Los días limpios se calculan desde `start_date`, no con check-ins.
 
-### Flujo D: evaluar un ciclo
-
-Disponible desde el hero y desde la fila del ciclo activo.
+### Flujo D: registrar un consumo
 
 ```text
-Evaluar
-└── POST /api/cycles/:id/finish
-    ├── Meta alcanzada → completado
-    ├── Mínimo alcanzado pero meta no alcanzada → resultado con déficit
-    ├── Mínimo no alcanzado → fallido
-    └── Error → mostrar aviso sin actualizar la interfaz como éxito
+Soul
+└── Admitir consumo
+    └── Elegir fecha y amplitud opcional
+        └── Registrar
+            ├── cleanDays > mínimo
+            │   ├── ciclo completado
+            │   ├── próximo ciclo activo desde la fecha del consumo
+            │   └── próximo mínimo y meta opcional visibles
+            └── cleanDays <= mínimo
+                ├── ciclo fallido
+                ├── soul muerta
+                └── memoria conservada
 ```
 
-Después de una respuesta correcta:
-
-1. Se muestra el resultado y los días logrados.
-2. Se informa el próximo mínimo o el reinicio base.
-3. Se vuelve a consultar el estado.
-4. Si corresponde, el servidor puede notificar a los contactos configurados.
-
-### Flujo E: consultar al Coach reflexivo
+### Flujo E: fijar o ampliar una meta
 
 ```text
-Coach reflexivo
+Soul
+├── Sin meta → Fijar meta
+└── Meta alcanzada → Ampliar meta
+    └── POST /api/cycles/:id/goal
+        ├── Éxito: la última meta pasa a ser la vigente
+        └── Error: aviso con la regla incumplida
+```
+
+### Flujo F: muerte, memoria y nueva soul
+
+```text
+Consumo con cleanDays <= mínimo
+└── Soul muerta
+    ├── Hoy muestra orbe muerto + máxima pureza + Nueva soul
+    └── Soul muestra historial + Memoria
+        └── Nueva soul
+            └── Onboarding → nueva soul viva
+```
+
+### Flujo G: consultar al Coach
+
+```text
+Coach
 └── Escribir reflexión
-    └── Consultar
-        ├── Botón deshabilitado si el texto está vacío
+    └── Enviar
         ├── POST /api/coach/reflection
-        ├── Mostrar perspectiva recibida
-        └── Mostrar error si la consulta falla
+        ├── Mostrar respuesta
+        └── Mostrar error si falla
 ```
 
-- Se muestra contador de caracteres hasta `10000`.
-- El Coach solo devuelve orientación; no cambia el estado ni las reglas de
-  los ciclos.
-- Si OpenAI no está configurado, el servidor devuelve una orientación
-  predeterminada.
-
-### Flujo G: administrar la red de apoyo
+### Flujo H: administrar la red de apoyo
 
 ```text
-Red de apoyo
-├── Completar Nombre y Correo
-│   └── Añadir
-│       ├── POST /api/contacts
-│       ├── Limpiar formulario
-│       └── Recargar lista
-└── Consultar contactos existentes
-    └── Mostrar avatar inicial, nombre y correo
+Red
+├── + → Nombre y correo → Añadir
+│   └── POST /api/contacts → recargar lista
+└── Tocar una fila → mostrar correo
 ```
 
-- **Añadir** permanece deshabilitado mientras falte nombre o correo.
-- El correo debe ser válido según la validación del backend.
-- Si no existen contactos, se muestra “Aún no hay contactos”.
-- No existe actualmente una acción de edición o eliminación de contactos.
+### Flujo I: borrar todos los datos
 
-## Flujos de conectividad
+```text
+Yo
+└── Borrar → confirmación
+    └── DELETE /api/users/me
+        ├── localStorage.clear()
+        └── volver a bienvenida
+```
 
-### Estado de conexión
+## Conectividad y estados transitorios
 
-- Al cargar la aplicación se consulta `GET /api/health`.
-- Si responde correctamente:
-  - Sidebar: **Sincronizado**.
-  - Barra superior: **Conectado**.
-- Si falla:
-  - Sidebar: **Sin conexión**.
-  - Barra superior: **Modo local**.
+- `GET /api/state` alimenta toda la interfaz.
+- Si falla, se muestra un bloque de error con opción **Reintentar**.
+- Las operaciones mutantes que fallan por red se guardan en `localStorage` y se reintentan al volver online.
+- Los errores HTTP no se encolan ni se transforman en éxito.
+- Avisos globales temporales para éxito, error e información.
+- Pantalla de carga con orbe mientras se resuelve el estado inicial.
+- Overlays: panel de estado, personalizador, modal de consumo, modal de meta, renombre y confirmación de borrado.
 
-### Operaciones offline
+## Capacidades no implementadas
 
-Cuando una operación mutante no puede ejecutarse por falta de conexión:
-
-1. Se guarda la solicitud en `localStorage` bajo
-   `abstinencia-offline-queue`.
-2. La interfaz no inventa una respuesta de éxito del backend.
-3. Al dispararse el evento `online`, se intenta vaciar la cola.
-4. Las solicitudes que siguen fallando permanecen en la cola.
-
-Las consultas `GET` no se encolan: si fallan, se muestra el error.
-
-## Estados y overlays transitorios
-
-- **Drawer de detalles del ciclo:** progreso actual, meta y porcentaje.
-- **Aviso global:** resultado o error de la última operación; se puede cerrar.
-- **Confirmación nativa:** protección antes de admitir un consumo.
-- **Feedback del Coach:** aparece debajo del formulario después de una respuesta.
-- **Estados vacíos:** sin ciclos y sin contactos.
-- **Animaciones:** entrada/salida de vistas, hero, filas del historial y avisos.
-
-## Capacidades no implementadas en la UI actual
-
-- No hay rutas URL profundas ni navegación del navegador por historial.
+- No hay rutas URL profundas ni navegación por historial del navegador.
 - No hay login, logout ni cambio de perfil.
-- No hay edición/eliminación de ciclos.
-- No hay edición/eliminación de contactos.
-- No hay pantalla propia de error o de carga.
-- No hay configuración visible para SMTP, Web Push u OpenAI.
-- El botón de menú móvil no abre/cierra actualmente un panel.
+- No hay edición ni eliminación de ciclos.
+- No hay edición ni eliminación de contactos.
+- No hay pantalla de configuración de SMTP, Web Push u OpenAI.
+- No hay envío de notificaciones Push conectado a los ciclos.

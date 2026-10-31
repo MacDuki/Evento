@@ -1,6 +1,8 @@
 ﻿import { Plus } from "lucide-react";
-export function EmptySoulOrb() {
-  return <div className="soul-orbit no-soul-orbit" aria-hidden="true">
+import type { Soul } from "../../types.js";
+
+export function EmptySoulOrb({ dead = false }: { dead?: boolean }) {
+  return <div className={`soul-orbit no-soul-orbit ${dead ? "is-dead" : ""}`} aria-hidden="true">
     <span className="soul-orb-loader">
       <svg width="100" height="100" viewBox="0 0 100 100" focusable="false">
         <defs>
@@ -20,11 +22,23 @@ export function EmptySoulOrb() {
   </div>;
 }
 
-export function NoSoul({ onCreate }: { onCreate: () => void }) {
-  return <section className="no-soul-state">
-    <h2 className="sr-only">Sin ciclo activo</h2>
-    <EmptySoulOrb />
-    <button className="primary empty-primary" type="button" onClick={onCreate}><span>Crear</span><Plus aria-hidden="true" /></button>
+export function NoSoul({ deadSoul, onCreate, onOpenMemory }: { deadSoul?: Soul | null; onCreate: () => void; onOpenMemory?: () => void }) {
+  const dead = deadSoul?.status === "dead";
+  return <section className={`no-soul-state ${dead ? "is-dead" : ""}`}>
+    {dead ? <>
+      <EmptySoulOrb dead />
+      <div className="no-soul-copy">
+        <span className="eyebrow">Memoria</span>
+        <h2>{deadSoul.name}</h2>
+        <p>Máxima pureza: <strong>{deadSoul.maxPurityDays} días</strong>. Su historia queda guardada.</p>
+      </div>
+    </> : <>
+      <h2 className="sr-only">Sin soul</h2>
+      <EmptySoulOrb />
+    </>}
+    <div className="no-soul-actions">
+      {dead && onOpenMemory && <button className="quiet-button memory-link" type="button" onClick={onOpenMemory}>Ver memoria</button>}
+      <button className="primary empty-primary" type="button" onClick={onCreate}><span>{dead ? "Nueva soul" : "Crear"}</span><Plus aria-hidden="true" /></button>
+    </div>
   </section>;
 }
-

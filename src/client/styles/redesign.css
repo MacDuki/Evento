@@ -1551,6 +1551,65 @@ body.soul-sheet-open.soul-sheet-closing .mobile-nav {
   color: var(--muted);
   font-size: 12px;
 }
+.data-tools {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.data-tools-copy {
+  display: grid;
+  gap: 3px;
+}
+.data-tools-copy strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.data-tools-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.data-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.data-action {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.data-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+.data-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.data-action svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.data-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
 .profile-panel > .soul-customizer {
   width: 100%;
 }

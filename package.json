@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"tsx watch src/server.ts\" \"vite --host 0.0.0.0\"",
+    "dev": "vite --host 0.0.0.0",
+    "dev:full": "concurrently \"tsx watch src/server.ts\" \"vite --host 0.0.0.0\"",
     "build": "tsc -p tsconfig.json && vite build",
     "start": "tsx src/server.ts",
     "test": "vitest run",

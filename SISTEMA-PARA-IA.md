@@ -2,7 +2,9 @@
 
 ## Objetivo
 
-Mantener una PWA local para ciclos progresivos de abstinencia. El backend Node/Express/TypeScript con SQLite es la autoridad. El frontend muestra el estado y solicita operaciones, pero no decide consecuencias.
+Mantener una PWA local-first para ciclos progresivos de abstinencia. La app ejecuta la lógica de dominio en el cliente y persiste el progreso en IndexedDB, con espejo en localStorage. El backend Node/Express/TypeScript con SQLite queda como legado opcional para migración o sincización futura; no es necesario para usar la app.
+
+> Las referencias a endpoints `/api`, SQLite y `x-user-id` describen el servidor legado. La implementación activa está en `src/client/services/localStore.ts` y reutiliza `src/domain`.
 
 ## Invariantes
 

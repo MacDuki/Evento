@@ -1,22 +1,22 @@
 ﻿import {
   AlertTriangle, ArrowUpRight, CalendarDays, Check, CheckCircle2, CircleDashed,
-  CircleX, Edit3, ImagePlus, LoaderCircle, Mail, Plus, RotateCcw,
-  Send, Sparkles, Target, Trash2, Trophy, UserRound, Users, X
+  CircleX, Download, Edit3, ImagePlus, LoaderCircle, Mail, Plus, RotateCcw,
+  Send, Sparkles, Target, Trash2, Trophy, Upload, UserRound, Users, X
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NoSoul, EmptySoulOrb } from "./components/common/EmptySoul.js";
 import { Navigation } from "./components/layout/Navigation.js";
-import { defaultOrbSettings, orbPalettes, statusLabels } from "./constants/app.js";
+import { defaultOrbSettings, orbEffects, orbPalettes, orbVariants, statusLabels } from "./constants/app.js";
 import { CycleOnboarding } from "./pages/Onboarding/CycleOnboarding.js";
 import { Soul, SoulMemory } from "./pages/Soul/Soul.js";
-import { api, isQueued } from "./services/api.js";
-import type { AppState, Contact, Cycle, OrbSettings, Soul as SoulType, SoulReaction, View } from "./types.js";
+import * as localStore from "./services/localStore.js";
+import type { Contact, Cycle, OrbSettings, Soul as SoulType, SoulReaction, View } from "./types.js";
 import { formatDate, today } from "./utils/dates.js";
 
 export function App() {
-  const [userId, setUserId] = useState(localStorage.getItem("userId") || "");
-  const [isLoading, setIsLoading] = useState(Boolean(localStorage.getItem("userId")));
+  const [profileId, setProfileId] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [stateError, setStateError] = useState("");
   const [pendingAction, setPendingAction] = useState("");
   const [soul, setSoul] = useState<SoulType | null>(null);
@@ -33,6 +33,7 @@ export function App() {
   const [consumptionDate, setConsumptionDate] = useState(today);
   const [nextAdditionalDays, setNextAdditionalDays] = useState("");
   const consumptionDateInputRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
   const [confirming, setConfirming] = useState<"consumption" | "delete" | null>(null);
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [goalInput, setNewGoalInput] = useState("");
@@ -88,34 +89,56 @@ export function App() {
     setMessage(text);
   };
 
-  function load() {
-    if (!userId) return;
-    setIsLoading(true);
+  async function load(showSpinner = false) {
+    if (showSpinner) setIsLoading(true);
     setStateError("");
-    void api<AppState>("/state").then(data => {
-      if (isQueued(data)) return;
-      setSoul(data.soul);
-      setSouls(data.souls);
-      setContacts(data.contacts);
-      setOnboarding(data.souls.length === 0 && localStorage.getItem(`onboarding-exited-${userId}`) !== "true");
-    }).catch(error => {
-      const text = error instanceof Error ? error.message : "No se pudo cargar tu espacio.";
-      if (text === "Usuario no encontrado") {
-        localStorage.removeItem("userId");
-        setUserId("");
+    try {
+      let state = await localStore.getState();
+      if (!state) {
+        const legacyUserId = localStorage.getItem("userId") || "";
+        if (legacyUserId) {
+          const migrated = await localStore.migrateLegacyServerState(legacyUserId);
+          if (migrated) state = await localStore.getState();
+        }
+      }
+      if (!state) {
+        setProfileId("");
         setSoul(null);
         setSouls([]);
         setContacts([]);
         setOnboarding(false);
-        setIsLoading(false);
         return;
       }
-      setStateError(text);
+      localStorage.removeItem("userId");
+      setProfileId(state.profileId);
+      setSoul(state.soul);
+      setSouls(state.souls);
+      setContacts(state.contacts);
+      setOnboarding(state.souls.length === 0 && localStorage.getItem(`onboarding-exited-${state.profileId}`) !== "true");
+    } catch (error) {
+      setStateError(error instanceof Error ? error.message : "No se pudo leer el almacenamiento local.");
       showMessage("No se pudo actualizar", "error");
-    }).finally(() => setIsLoading(false));
+    } finally {
+      if (showSpinner) setIsLoading(false);
+    }
   }
 
-  useEffect(() => { load(); }, [userId]);
+  useEffect(() => { void load(true); }, []);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "en-calma-state-v1") void load();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!message) return;
@@ -154,12 +177,12 @@ export function App() {
   async function createUser() {
     setPendingAction("profile");
     try {
-      const data = await api<{ id: string }>("/users", { method: "POST", body: "{}" }, false);
-      if (isQueued(data)) throw new Error("Necesitás conexión para crear el espacio.");
-      localStorage.setItem("userId", data.id);
-      setUserId(data.id);
+      await localStore.createProfile();
+      await load();
       showMessage("Espacio listo");
-    } catch { showMessage("No se pudo entrar", "error"); }
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "No se pudo entrar", "error");
+    }
     finally { setPendingAction(""); }
   }
 
@@ -182,12 +205,13 @@ export function App() {
       if (!Number.isInteger(minValue) || minValue < 1) { showMessage("El mínimo debe ser un entero mayor que cero", "error"); return; }
       if (goalValue !== null && (!Number.isInteger(goalValue) || goalValue <= minValue)) { showMessage("La meta debe superar el mínimo", "error"); return; }
       if (!cycleStart || cycleStart > today()) { showMessage("Revisá la fecha de inicio", "error"); return; }
-      const result = await api<{ soul: SoulType }>("/souls", {
-        method: "POST",
-        body: JSON.stringify({ name: soulName.trim(), minCleanDays: minValue, goalDays: goalValue, startDate: cycleStart })
+      await localStore.createSoul({
+        name: soulName.trim(),
+        minCleanDays: minValue,
+        goalDays: goalValue,
+        startDate: cycleStart
       });
-      if (isQueued(result)) { setOnboarding(false); showMessage("Soul pendiente", "info"); return; }
-      localStorage.removeItem(`onboarding-exited-${userId}`);
+      localStorage.removeItem(`onboarding-exited-${profileId}`);
       setOnboarding(false);
       setSoulName("");
       setMin("1");
@@ -196,7 +220,7 @@ export function App() {
       setStartDate(today());
       setSoulReaction("awakening");
       showMessage("Soul y primer ciclo creados");
-      load();
+      await load();
     } catch (error) {
       showMessage(error instanceof Error ? error.message : "No se pudo crear la soul", "error");
     } finally { setPendingAction(""); }
@@ -216,11 +240,7 @@ export function App() {
       if (eventDate < cycle.startDate || eventDate > today()) { showMessage("La fecha debe estar dentro del ciclo y no puede ser futura", "error"); return; }
       const additionalValue = additional.trim() === "" ? undefined : Number(additional);
       if (additionalValue !== undefined && (!Number.isInteger(additionalValue) || additionalValue < 0)) { showMessage("La amplitud debe ser un entero no negativo", "error"); return; }
-      const data = await api<{ cleanDays: number; soulStatus: string; nextMinCleanDays: number | null; nextGoalDays: number | null }>(`/cycles/${cycle.id}/admit-consumption`, {
-        method: "POST",
-        body: JSON.stringify({ eventDate, nextGoalAdditionalDays: additionalValue })
-      });
-      if (isQueued(data)) { showMessage("Registro pendiente", "info"); return; }
+      const data = await localStore.admitConsumption(cycle.id, eventDate, additionalValue);
       setConfirming(null);
       setNextAdditionalDays("");
       setSoulReaction(data.soulStatus === "dead" ? "dead" : "consumption");
@@ -230,7 +250,7 @@ export function App() {
         const goalMessage = data.nextGoalDays ? ` Próxima meta: ${data.nextGoalDays} días.` : " Próximo ciclo sin meta.";
         showMessage(`Ciclo cerrado con ${data.cleanDays} días. Próximo mínimo: ${data.nextMinCleanDays}.${goalMessage}`);
       }
-      load();
+      await load();
     } catch (error) {
       showMessage(error instanceof Error ? error.message : "No se pudo registrar el consumo", "error");
     } finally { setPendingAction(""); }
@@ -248,13 +268,12 @@ export function App() {
     if (!Number.isInteger(value) || value <= 0) { showMessage("La meta debe ser un entero positivo", "error"); return; }
     setPendingAction("goal");
     try {
-      const result = await api(`/cycles/${activeCycle.id}/goal`, { method: "POST", body: JSON.stringify({ goalDays: value }) });
-      if (isQueued(result)) { showMessage("Meta pendiente", "info"); return; }
+      await localStore.setGoal(activeCycle.id, value);
       setGoalDialogOpen(false);
       setNewGoalInput("");
       setSoulReaction("goal");
       showMessage("Meta guardada");
-      load();
+      await load();
     } catch (error) {
       showMessage(error instanceof Error ? error.message : "No se pudo guardar la meta", "error");
     } finally { setPendingAction(""); }
@@ -264,43 +283,36 @@ export function App() {
     const name = value.trim();
     if (!name || !activeSoul) return;
     try {
-      const data = await api(`/souls/${activeSoul.id}/name`, { method: "POST", body: JSON.stringify({ name }) });
-      if (isQueued(data)) { showMessage("Nombre pendiente", "info"); return; }
-      setSoul(current => current ? { ...current, name } : current);
-      setSouls(current => current.map(item => item.id === activeSoul.id ? { ...item, name } : item));
+      await localStore.renameSoul(activeSoul.id, name);
       setIsRenaming(false);
       setSoulReaction("rename");
       showMessage("Nombre actualizado");
+      await load();
     } catch (error) {
       showMessage(error instanceof Error ? error.message : "No se pudo cambiar", "error");
     }
   }
 
   async function askCoach() {
+    if (!reflection.trim()) return;
     setPendingAction("coach");
     try {
-      const data = await api<{ feedback: string }>("/coach/reflection", {
-        method: "POST",
-        body: JSON.stringify({ cycleId: activeCycle?.id, reflection })
-      });
-      if (isQueued(data)) { showMessage("Reflexión pendiente", "info"); return; }
-      setFeedback(data.feedback);
+      setFeedback("Gracias por detenerte a mirar lo que estás viviendo. No hace falta resolverlo todo hoy: elegí un acto concreto y pequeño que puedas sostener. La constancia también se construye con descanso y honestidad.");
       showMessage("Respuesta lista");
-    } catch (error) {
-      showMessage(error instanceof Error ? error.message : "No se pudo consultar", "error");
-    } finally { setPendingAction(""); }
+    } finally {
+      setPendingAction("");
+    }
   }
 
   async function addContact() {
     setPendingAction("contact");
     try {
-      const data = await api("/contacts", { method: "POST", body: JSON.stringify({ name: contactName, email: contactEmail }) });
+      await localStore.addContact(contactName, contactEmail);
       setContactName("");
       setContactEmail("");
       setContactFormOpen(false);
-      if (isQueued(data)) { showMessage("Contacto pendiente", "info"); return; }
       showMessage("Contacto añadido");
-      load();
+      await load();
     } catch (error) {
       showMessage(error instanceof Error ? error.message : "No se pudo añadir", "error");
     } finally { setPendingAction(""); }
@@ -320,24 +332,104 @@ export function App() {
     reader.readAsDataURL(file);
   }
 
+  function parseBackupSettings(value: unknown): Partial<OrbSettings> | null {
+    if (!value || typeof value !== "object") return null;
+    const candidate = value as Record<string, unknown>;
+    const patch: Partial<OrbSettings> = {};
+    if (typeof candidate.palette === "string" && Object.hasOwn(orbPalettes, candidate.palette)) {
+      patch.palette = candidate.palette as OrbSettings["palette"];
+    }
+    if (typeof candidate.effect === "string" && orbEffects.some(item => item.id === candidate.effect)) {
+      patch.effect = candidate.effect as OrbSettings["effect"];
+    }
+    if (typeof candidate.variant === "string" && orbVariants.some(item => item.id === candidate.variant)) {
+      patch.variant = candidate.variant as OrbSettings["variant"];
+    }
+    if (typeof candidate.size === "number" && Number.isFinite(candidate.size)) {
+      patch.size = Math.min(3, Math.max(1.5, candidate.size));
+    }
+    return Object.keys(patch).length ? patch : null;
+  }
+
+  async function exportBackup() {
+    setPendingAction("export");
+    try {
+      const snapshot = await localStore.exportSnapshot();
+      if (!snapshot) throw new Error("Todavía no hay datos para exportar");
+      const payload = { ...snapshot, exportedAt: new Date().toISOString(), settings: orbSettings };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `en-calma-respaldo-${today()}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      showMessage("Respaldo exportado");
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "No se pudo exportar", "error");
+    } finally {
+      setPendingAction("");
+    }
+  }
+
+  async function importBackup(file: File) {
+    setPendingAction("import");
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text) as unknown;
+      } catch {
+        throw new Error("El archivo no es un JSON válido");
+      }
+      const state = await localStore.importSnapshot(parsed);
+      const settings = parsed && typeof parsed === "object"
+        ? parseBackupSettings((parsed as Record<string, unknown>).settings)
+        : null;
+      if (settings) updateOrbSettings(settings);
+      await load();
+      showMessage(`Respaldo restaurado: ${state.souls.length} ${state.souls.length === 1 ? "soul" : "souls"}`);
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "No se pudo importar", "error");
+    } finally {
+      setPendingAction("");
+    }
+  }
+
   async function deleteUserData() {
     setPendingAction("delete");
     try {
-      await api("/users/me", { method: "DELETE" });
+      await localStore.deleteAllLocalData();
       localStorage.clear();
       setConfirming(null);
-      setUserId("");
+      setProfileId("");
       setSoul(null);
       setSouls([]);
       setContacts([]);
       setProfilePhoto("");
       setOrbSettings(defaultOrbSettings);
       setView("dashboard");
+      setStateError("");
     } catch { showMessage("No se pudo borrar", "error"); }
     finally { setPendingAction(""); }
   }
 
-  if (!userId) return <main className="onboarding">
+  if (isLoading) return <main className="loading-screen">
+    <div className="brand"><span className="brand-mark" aria-hidden="true" />En calma</div>
+    <section className="loading-stage" aria-live="polite"><span className="loading-orb" aria-hidden="true" /><span className="sr-only">Cargando</span></section>
+  </main>;
+
+  if (stateError) return <main className="onboarding">
+    <section className="state-error" role="alert">
+      <AlertTriangle aria-hidden="true" />
+      <div><strong>No se pudo abrir tu espacio local</strong><details><summary>Detalle</summary><span>{stateError}</span></details></div>
+      <button className="icon-action quiet-icon" type="button" title="Reintentar" aria-label="Reintentar" onClick={() => void load(true)}><RotateCcw aria-hidden="true" /></button>
+    </section>
+  </main>;
+
+  if (!profileId) return <main className="onboarding">
     <section className="welcome">
       <EmptySoulOrb />
       <div className="welcome-copy-block"><h1>Un día <em>a la vez.</em></h1></div>
@@ -345,11 +437,6 @@ export function App() {
         <span>Entrar</span>{pendingAction === "profile" ? <LoaderCircle className="spin" aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}
       </button>
     </section>
-  </main>;
-
-  if (isLoading) return <main className="loading-screen">
-    <div className="brand"><span className="brand-mark" aria-hidden="true" />En calma</div>
-    <section className="loading-stage" aria-live="polite"><span className="loading-orb" aria-hidden="true" /><span className="sr-only">Cargando</span></section>
   </main>;
 
   if (onboarding) return <CycleOnboarding
@@ -365,7 +452,7 @@ export function App() {
     setStartDate={setStartDate}
     onFinish={createSoul}
     onExit={() => {
-      localStorage.setItem(`onboarding-exited-${userId}`, "true");
+      localStorage.setItem(`onboarding-exited-${profileId}`, "true");
       setOnboarding(false);
     }}
   />;
@@ -376,7 +463,7 @@ export function App() {
     <section className="content" id="main-content">
       <div className="mobile-nav"><Navigation view={view} setView={setView} /></div>
       {stateError
-        ? <section className="state-error" role="alert"><AlertTriangle aria-hidden="true" /><div><strong>Sin conexión</strong><details><summary>Detalle</summary><span>{stateError}</span></details></div><button className="icon-action quiet-icon" type="button" title="Reintentar" aria-label="Reintentar" onClick={load}><RotateCcw aria-hidden="true" /></button></section>
+        ? <section className="state-error" role="alert"><AlertTriangle aria-hidden="true" /><div><strong>No se pudo leer el almacenamiento local</strong><details><summary>Detalle</summary><span>{stateError}</span></details></div><button className="icon-action quiet-icon" type="button" title="Reintentar" aria-label="Reintentar" onClick={() => void load(true)}><RotateCcw aria-hidden="true" /></button></section>
         : <AnimatePresence mode="wait"><motion.div key={view} className="view-content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .28, ease: [0.2, 0, 0, 1] }}>
 
           {view === "dashboard" && <section className="dashboard">
@@ -474,6 +561,21 @@ export function App() {
 
           {view === "profile" && <section className="profile-page"><header className="screen-heading"><span className="screen-heading-icon"><UserRound aria-hidden="true" /></span><div><span className="eyebrow">Tu espacio</span><h1>Yo</h1></div></header><section className="profile-panel">
             <div className="profile-photo-row"><div className="profile-avatar">{profilePhoto ? <img src={profilePhoto} alt="Foto de perfil" /> : <UserRound aria-hidden="true" />}<label className="photo-upload" title="Cambiar foto"><ImagePlus aria-hidden="true" /><span className="sr-only">Cambiar foto</span><input type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) saveProfilePhoto(file); event.target.value = ""; }} /></label></div><div className="profile-copy"><strong>Tu perfil</strong><span>Una experiencia hecha a tu manera.</span></div></div>
+            <div className="data-tools" aria-label="Respaldo de datos">
+              <div className="data-tools-copy"><strong>Respaldo local</strong><span>Exportá o restaurá tu progreso desde un archivo JSON.</span></div>
+              <div className="data-actions">
+                <button className="data-action" type="button" disabled={pendingAction === "export"} onClick={() => void exportBackup()}>
+                  {pendingAction === "export" ? <LoaderCircle className="spin" aria-hidden="true" /> : <Download aria-hidden="true" />}
+                  <span>Exportar</span>
+                </button>
+                <button className="data-action" type="button" disabled={pendingAction === "import"} onClick={() => backupInputRef.current?.click()}>
+                  {pendingAction === "import" ? <LoaderCircle className="spin" aria-hidden="true" /> : <Upload aria-hidden="true" />}
+                  <span>Importar</span>
+                </button>
+              </div>
+              <input ref={backupInputRef} className="sr-only" type="file" accept=".json,application/json" tabIndex={-1} aria-hidden="true" onChange={event => { const file = event.target.files?.[0]; if (file) void importBackup(file); event.target.value = ""; }} />
+              <p className="data-note">Tus datos se guardan únicamente en este navegador. Exportá un respaldo antes de borrar los datos del sitio o cambiar de dispositivo.</p>
+            </div>
             <button className="danger-tile" type="button" onClick={() => setConfirming("delete")}><span>Borrar mis datos</span><Trash2 aria-hidden="true" /></button>
           </section></section>}
 

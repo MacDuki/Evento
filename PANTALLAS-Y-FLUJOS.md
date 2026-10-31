@@ -2,7 +2,9 @@
 
 ## Alcance
 
-Este documento describe la interfaz implementada en `src/client/App.tsx`. La aplicación es una SPA mobile-first: no hay rutas URL ni router; la pantalla visible se determina por el estado local `view`, por la existencia de `userId` en `localStorage` y por el estado de las souls. En móvil, las cinco secciones viven en una barra inferior de vidrio; en pantallas grandes se usa navegación lateral.
+Este documento describe la interfaz implementada en `src/client/App.tsx`. La aplicación es una SPA local-first mobile-first: no hay rutas URL ni router; la pantalla visible se determina por el estado local `view`, por la existencia de un perfil en IndexedDB y por el estado de las souls. En móvil, las cinco secciones viven en una barra inferior de vidrio; en pantallas grandes se usa navegación lateral.
+
+> Las menciones a `userId`, `/api` y SQLite corresponden al modo legado. El flujo actual guarda todo en el navegador y permite exportar/importar un respaldo JSON.
 
 ## Mapa general
 
@@ -27,15 +29,14 @@ Con userId
 
 ### 1. Bienvenida
 
-- **Cuándo aparece:** no existe `localStorage.userId`.
+- **Cuándo aparece:** no existe un perfil local en IndexedDB.
 - **Contenido:** orbe vacío y CTA **Entrar**.
 - **Flujo:**
   1. La persona pulsa **Entrar**.
-  2. El cliente ejecuta `POST /api/users`.
-  3. Guarda el `id` en `localStorage.userId`.
-  4. Recarga el estado. Si no hay souls, aparece el onboarding.
+  2. El cliente crea el perfil local y su snapshot vacío.
+  3. Recarga el estado. Si no hay souls, aparece el onboarding.
 
-Si el `userId` guardado ya no existe en la base, `GET /api/state` responde “Usuario no encontrado”. El cliente borra ese identificador y vuelve a la bienvenida sin dejar la pantalla bloqueada.
+Si existe un `userId` antiguo de la versión con servidor y todavía no hay datos locales, el cliente intenta migrar el estado una vez. Si no hay API disponible, la bienvenida sigue funcionando sin bloquearse.
 
 ### 2. Onboarding de soul
 
@@ -204,7 +205,8 @@ Permite agregar contactos de responsabilidad y consultarlos.
 - Foto de perfil local, guardada en `localStorage` como data URL.
 - Validación de tipo de imagen y tamaño máximo de 2,5 MB.
 - Acceso a la personalización global de la interfaz y del orbe.
-- Botón **Borrar mis datos** con confirmación. Ejecuta `DELETE /api/users/me`, limpia `localStorage` y vuelve a la bienvenida.
+- **Respaldo local**: exporta e importa todo el progreso y los ajustes como JSON.
+- Botón **Borrar mis datos** con confirmación. Elimina IndexedDB, el espejo en `localStorage` y vuelve a la bienvenida.
 
 ## Flujos funcionales
 
@@ -213,7 +215,7 @@ Permite agregar contactos de responsabilidad y consultarlos.
 ```text
 Bienvenida
 └── Entrar
-    ├── Éxito: POST /api/users → guardar userId → cargar estado
+    ├── Éxito: crear perfil local en IndexedDB → cargar estado
     └── Error: aviso y permanecer en bienvenida
 ```
 
@@ -223,8 +225,8 @@ Bienvenida
 Onboarding
 └── Nombre → Mínimo → Meta opcional → Inicio
     └── Crear
-        ├── Éxito: POST /api/souls → recargar → orbe vivo
-        └── Error: aviso con el mensaje del servidor
+        ├── Éxito: guardar soul y primer ciclo en IndexedDB → orbe vivo
+        └── Error: aviso con el mensaje de validación
 ```
 
 ### Flujo C: consultar el progreso
@@ -304,17 +306,17 @@ Red
 ```text
 Yo
 └── Borrar → confirmación
-    └── DELETE /api/users/me
+    └── eliminar IndexedDB y el espejo local
         ├── localStorage.clear()
         └── volver a bienvenida
 ```
 
-## Conectividad y estados transitorios
+## Estado local y respaldo
 
-- `GET /api/state` alimenta toda la interfaz.
-- Si falla, se muestra un bloque de error con opción **Reintentar**.
-- Las operaciones mutantes que fallan por red se guardan en `localStorage` y se reintentan al volver online.
-- Los errores HTTP no se encolan ni se transforman en éxito.
+- IndexedDB alimenta toda la interfaz; el espejo en `localStorage` permite recuperar el último snapshot si IndexedDB no está disponible.
+- Si la lectura falla, se muestra un bloque de error con opción **Reintentar**.
+- **Yo → Respaldo local** exporta o restaura un JSON con souls, ciclos, metas, contactos y ajustes.
+- Los datos no se sincronizan entre dispositivos ni entre orígenes distintos.
 - Avisos globales temporales para éxito, error e información.
 - Pantalla de carga con orbe mientras se resuelve el estado inicial.
 - Overlays: panel de estado, hoja de apariencia, modal de consumo, modal de meta, renombre y confirmación de borrado.

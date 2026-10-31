@@ -1,18 +1,24 @@
 # En calma
 
-Aplicación local full-stack para sostener ciclos progresivos de abstinencia alrededor de una **soul**. El servidor es la fuente de verdad: calcula los días de calendario, valida las metas, decide si un consumo cierra el ciclo con éxito o hace morir la soul y conserva la memoria de cada soul.
+Aplicación **local-first** para sostener ciclos progresivos de abstinencia alrededor de una **soul**. El progreso se guarda en el navegador y la app funciona sin backend.
+
+- Persistencia principal: **IndexedDB** (base `en-calma`, registro `app`).
+- Espejo de recuperación: **localStorage** (`en-calma-state-v1`).
+- Ajustes visuales y foto de perfil: `localStorage`.
+- Respaldo manual: exportación e importación de un archivo JSON desde **Yo → Respaldo local**.
+
+No requiere cuenta, servidor ni conexión una vez cargada. Los datos pertenecen al navegador y al origen exacto donde se abra la app.
 
 ## Ejecutar
 
-Requiere Node.js y un gestor de paquetes. Las versiones de dependencias no se fijan por decisión del proyecto.
+Requiere Node.js y un gestor de paquetes.
 
 ```bash
 npm install
-copy .env.example .env
 npm run dev
 ```
 
-La API queda en `http://localhost:3000` y el frontend de desarrollo en `http://localhost:5173`. Vite redirige `/api` hacia Express; para usar la aplicación deben estar corriendo ambos procesos con `npm run dev`.
+La app queda disponible en `http://localhost:5173`. No hace falta crear un `.env`.
 
 Validación:
 
@@ -20,6 +26,20 @@ Validación:
 npm test
 npm run build
 ```
+
+La build estática se genera en `dist/client`.
+
+## Migrar datos del servidor anterior
+
+La versión anterior guardaba el progreso en Express + SQLite. El cliente nuevo intenta migrarlo automáticamente una sola vez si encuentra un `userId` antiguo en `localStorage` y no hay datos locales.
+
+Para hacer esa migración con la API anterior disponible:
+
+```bash
+npm run dev:full
+```
+
+Abrí la app, verificá que aparezcan tus souls y después podés volver a `npm run dev`. El servidor queda como legado opcional; la app local no lo usa.
 
 ## Modelo en una mirada
 
@@ -29,26 +49,6 @@ npm run build
 - La meta es opcional. Puede fijarse al crear la soul o más adelante. Una meta existente solo puede ampliarse cuando ya fue alcanzada.
 - Las fechas son días de calendario local (`AAAA-MM-DD`), sin horas ni zonas horarias.
 - La memoria de las souls muertas se conserva y se consulta desde la sección **Memoria** de la pantalla Soul.
-
-## API principal
-
-Todas las rutas salvo `POST /api/users` y `GET /api/health` requieren el header `x-user-id`.
-
-| Método | Ruta | Uso |
-|---|---|---|
-| `POST` | `/api/users` | Crea un perfil local. |
-| `DELETE` | `/api/users/me` | Borra el perfil y todos sus datos. |
-| `GET` | `/api/state` | Devuelve la soul viva, todas las souls, sus ciclos, metas y contactos. |
-| `POST` | `/api/souls` | Crea una soul viva y su primer ciclo de forma atómica. |
-| `GET` | `/api/souls/:id` | Consulta una soul propia, viva o muerta. |
-| `POST` | `/api/souls/:id/name` | Renombra una soul viva. |
-| `POST` | `/api/cycles/:id/goal` | Fija una meta nueva o amplía una meta alcanzada. |
-| `POST` | `/api/cycles/:id/admit-consumption` | Registra un consumo, cierra el ciclo y crea el siguiente si corresponde. |
-| `POST` | `/api/coach/reflection` | Obtiene feedback opcional de OpenAI y lo audita. |
-| `POST` | `/api/contacts` | Registra un contacto de responsabilidad. |
-| `GET` | `/api/health` | Comprueba que la API responde. |
-
-Ya no existen `POST /api/cycles` ni `POST /api/cycles/:id/finish`: el primer ciclo nace con la soul y el único cierre posible es admitir un consumo.
 
 ## Reglas de progresión
 
@@ -64,9 +64,7 @@ Si `C <= mínimo`, el ciclo falla y la soul muere. Si `C > mínimo`, el ciclo se
 próximoMínimo = max(C, G o 0) + 1
 ```
 
-El mismo cálculo se usa aunque la meta se haya ampliado varias veces: se toma la última meta registrada en `cycle_goals`.
-
-Ejemplos:
+El mismo cálculo se usa aunque la meta se haya ampliado varias veces.
 
 | Mínimo | Meta | Días al consumir | Resultado | Próximo mínimo |
 |---|---|---|---|---|
@@ -76,42 +74,61 @@ Ejemplos:
 | 8 | — | 10 | Completa, déficit 0 | 11 |
 | 8 | 12 | 8 | Falla, la soul muere | — |
 
-## Navegación del frontend
+La lógica pura vive en `src/domain/cycle.ts` y `src/domain/dates.ts`; el almacenamiento local la reutiliza sin depender del servidor.
 
-- **Hoy**: home mobile-first con el orbe como protagonista. Al tocarlo se abre el panel con ciclo, días limpios, mínimo, meta, máximo y fecha de inicio. Si la soul murió, se muestra el orbe muerto, su máxima pureza y la CTA **Nueva soul**.
-- **Soul**: identidad, renombre, máximo histórico, historial de ciclos, acciones de meta y consumo. Incluye **Memoria**, donde se consultan las souls muertas y sus ciclos.
-- **Coach**: reflexión libre y feedback opcional. El coach no altera estados ni reglas.
+## Navegación
+
+- **Hoy**: home mobile-first con el orbe como protagonista, fecha, frase y brújula de días. Al tocar el orbe se abre el panel con ciclo, días limpios, mínimo, meta, máximo y fecha de inicio.
+- **Soul**: identidad, renombre, máximo histórico, historial de ciclos, acciones de meta y consumo. Incluye **Memoria**.
+- **Coach**: reflexión libre con respuesta local. No altera estados ni reglas.
 - **Red**: contactos de responsabilidad.
-- **Yo**: foto local, personalización de la interfaz/orbe y borrado completo de los datos.
+- **Yo**: foto local, personalización del orbe y **Respaldo local**.
 
-La apariencia parte de una paleta neutra oscura. Se puede elegir entre seis acentos, cuatro estilos de orbe (Líquido, Prisma, Rombo y Triángulo) y tres movimientos (Fluido, Calmo y Pulso); los ajustes se guardan localmente.
+La apariencia parte de una paleta neutra oscura. Se puede elegir entre seis acentos, cuatro estilos de orbe y tres movimientos; los ajustes se guardan localmente.
 
-El consumo se registra únicamente desde la pantalla Soul, con el botón de advertencia. El modal permite elegir la fecha y una amplitud opcional para la meta del ciclo siguiente. Si la amplitud queda vacía, el ciclo siguiente nace sin meta.
+## Respaldo y datos
 
-## Persistencia
+El archivo exportado contiene:
 
-SQLite se inicializa en `DATABASE_FILE` o en `./data/abstinencia.sqlite`. Entidades principales:
+- perfil local,
+- souls,
+- ciclos,
+- metas,
+- contactos,
+- ajustes visuales.
 
-- `users`, `souls`, `cycles`, `cycle_goals`, `accountability_contacts`, `events_log`, `offline_operations`.
+Para restaurar, usá **Yo → Importar**. El respaldo reemplaza los datos actuales, así que conviene exportar antes de importar otro archivo.
 
-Las operaciones críticas —crear soul, fijar meta, admitir consumo y crear el ciclo siguiente— son transaccionales. Las tablas dependientes usan `ON DELETE CASCADE` para que borrar un usuario elimine su rastro.
+Cosas importantes:
 
-### Reinicio de la base local
+- Los datos se guardan por navegador y por origen. `localhost`, `usuario.github.io/repo` y un dominio propio son almacenamientos distintos.
+- Si el usuario borra los datos del sitio, se pierde el progreso guardado.
+- No hay sincronización entre dispositivos.
+- Para conservar el progreso, exportá un respaldo antes de cambiar de navegador, de URL o de dispositivo.
 
-Esta versión cambia el esquema respecto de la anterior. Para reiniciar los datos locales, con la aplicación detenida:
+## Publicar en GitHub Pages
 
-```powershell
-Copy-Item data/abstinencia.sqlite data/abstinencia.sqlite.bak
-Remove-Item data/abstinencia.sqlite
+El proyecto ya incluye `.github/workflows/deploy.yml` y usa rutas relativas para funcionar en un subdirectorio (`usuario.github.io/repo`).
+
+1. Subí el repositorio a GitHub.
+2. En **Settings → Pages**, elegí **Source: GitHub Actions**.
+3. Hacé push a `main` o ejecutá el workflow manualmente.
+
+El workflow instala dependencias, corre `npm run build` y publica `dist/client`.
+
+GitHub Pages solo sirve archivos estáticos; es suficiente porque esta versión no necesita API ni base de datos remota.
+
+## Servidor legado (opcional)
+
+Los archivos `src/server.ts` y `src/server/*` se conservan para migración y para una futura sincronización. La API anterior expone rutas bajo `/api` y usa SQLite en `DATABASE_FILE` o `./data/abstinencia.sqlite`.
+
+```bash
+npm run dev:full
+# o
+npm start
 ```
 
-Al arrancar de nuevo, SQLite recrea las tablas. Si `localStorage.userId` apunta a un usuario que ya no existe, la aplicación descarta ese identificador y vuelve a la bienvenida.
-
-## Reglas de autoridad
-
-El servidor calcula y valida; el cliente solo muestra y solicita. La IA no modifica estados ni cálculos. SMTP y Web Push solo se activan con variables explícitas. Los secretos viven en `.env`.
-
-Cuando no hay conexión, las operaciones mutantes del cliente se guardan en `localStorage` y se reintentan al volver online. Una respuesta HTTP de error nunca se transforma en éxito: el backend sigue siendo la autoridad.
+Variables opcionales del servidor: `OPENAI_API_KEY`, `OPENAI_MODEL`, SMTP (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`) y Web Push (`WEB_PUSH_ENABLED`, claves VAPID). Nada de esto es necesario para la app local.
 
 ## Documentación
 

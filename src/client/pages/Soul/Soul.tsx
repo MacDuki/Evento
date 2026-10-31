@@ -10,13 +10,27 @@ import type { Cycle, OrbPalette, OrbSettings, SoulReaction, Soul as SoulType } f
 import { formatDate, formatLongDate, formatLongDateParts, today } from "../../utils/dates.js";
 
 const exampleSoulQuotes = soulQuotes;
+const LAST_QUOTE_KEY = "en-calma-last-quote";
+
+function pickOpeningQuoteIndex(): number {
+  if (exampleSoulQuotes.length <= 1) return 0;
+  let last = -1;
+  try {
+    const stored = Number(localStorage.getItem(LAST_QUOTE_KEY));
+    if (Number.isInteger(stored) && stored >= 0 && stored < exampleSoulQuotes.length) last = stored;
+  } catch {
+    // Sin almacenamiento disponible se elige una frase al azar.
+  }
+  const candidates = exampleSoulQuotes.map((_, index) => index).filter(index => index !== last);
+  return candidates[Math.floor(Math.random() * candidates.length)] ?? 0;
+}
 
 export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsChange }: {
   soul: SoulType; cycle?: Cycle; cleanDays: number; reaction: SoulReaction; settings: OrbSettings; onSettingsChange: (patch: Partial<OrbSettings>) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [selectedDate, setSelectedDate] = useState(today);
-  const [quoteIndex, setQuoteIndex] = useState(0);
+  const [quoteIndex, setQuoteIndex] = useState(pickOpeningQuoteIndex);
   const [quoteDirection, setQuoteDirection] = useState(1);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const orbRef = useRef<HTMLButtonElement>(null);
@@ -127,6 +141,14 @@ export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsCha
   useEffect(() => {
     setSelectedDate(today());
   }, [cycle?.id]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAST_QUOTE_KEY, String(quoteIndex));
+    } catch {
+      // La frase igual cambia durante la sesión.
+    }
+  }, [quoteIndex]);
 
   return <section className={`soul-stage ${expanded ? "is-expanded" : ""} select-none`} style={orbStyle}>
     <header className="soul-stage-header date-topbar">

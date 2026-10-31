@@ -4,7 +4,7 @@
 
 La aplicación sostiene una progresión de ciclos de abstinencia organizada alrededor de una **soul**. Una soul vive mientras sus ciclos se cierren con éxito y muere de forma permanente cuando un consumo no supera el mínimo del ciclo.
 
-La regla de negocio vive en el servidor. El frontend muestra el estado y calcula datos visuales, pero el servidor es la autoridad para cerrar ciclos, crear el ciclo siguiente y cambiar el estado de la soul.
+La regla de negocio vive en `src/domain/cycle.ts` y `src/domain/dates.ts`. La app actual es local-first: el cliente ejecuta esas reglas y guarda el progreso en IndexedDB. Las referencias a la API y a SQLite en este documento describen el servidor legado, conservado para migración y para una futura sincronización.
 
 ## 2. Conceptos principales
 

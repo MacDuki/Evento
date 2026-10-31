@@ -140,6 +140,8 @@ Al cambiar una regla, modificar primero estos archivos y sus pruebas. Después a
 - `src/client/types.ts`: tipos `Soul`, `Cycle`, `AppState`.
 - `src/client/utils/dates.ts`: reexporta las fechas del dominio.
 
+La interfaz está diseñada mobile-first con cinco destinos. `OrbSettings` persiste en `localStorage` el acento global y el estilo, movimiento y tamaño del orbe; el valor inicial es neutro y no modifica las reglas de dominio.
+
 El consumo se registra únicamente desde la pantalla Soul. El modal envía la fecha y la amplitud opcional para la meta del ciclo siguiente.
 
 ## Extensión segura

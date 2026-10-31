@@ -1,20 +1,31 @@
 ﻿import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { CalendarDays, Check, CheckCircle2, ChevronDown, CircleDashed, CircleX, Maximize2, Minimize2, Palette, SlidersHorizontal, Sparkles, Trophy, Waves, Wind, X } from "lucide-react";
+import { CalendarDays, Check, CheckCircle2, ChevronDown, CircleDashed, CircleX, Maximize2, Minimize2, Palette, SlidersHorizontal, Sparkles, Target, Trophy, Waves, Wind, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { orbEffects, orbPalettes, statusLabels } from "../../constants/app.js";
-import { formatDate } from "../../utils/dates.js";
+import { orbEffects, orbPalettes, orbVariants, statusLabels } from "../../constants/app.js";
+import { DateCompass } from "../../components/date-compass/DateCompass.js";
+import soulQuotes from "../../data/soul-quotes.json" with { type: "json" };
+import { formatDate, formatLongDate, formatLongDateParts, today } from "../../utils/dates.js";
 import type { Cycle, OrbPalette, OrbSettings, Soul as SoulType, SoulReaction } from "../../types.js";
+
+const exampleSoulQuotes = soulQuotes;
 
 export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsChange }: {
   soul: SoulType; cycle?: Cycle; cleanDays: number; reaction: SoulReaction; settings: OrbSettings; onSettingsChange: (patch: Partial<OrbSettings>) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [quoteIndex, setQuoteIndex] = useState(0);
+  const [quoteDirection, setQuoteDirection] = useState(1);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const orbRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const quotePointerStart = useRef<{ x: number; y: number } | null>(null);
+  const quoteSwiped = useRef(false);
   const reduceMotion = useReducedMotion();
   const status = soul.status === "dead" ? "Soul muerta" : cycle ? "Soul viva" : "Soul nueva";
   const palette = orbPalettes[settings.palette];
+  const selectedDateParts = formatLongDateParts(selectedDate);
   const progress = cycle?.goalDays ? Math.min(100, Math.round((cleanDays / Math.max(cycle.goalDays, 1)) * 100)) : 0;
   const orbStyle = {
     "--color-one": palette.one,
@@ -27,43 +38,135 @@ export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsCha
     "--progress": `${progress}%`
   } as React.CSSProperties;
 
-  useEffect(() => {
-    const root = document.documentElement;
+  function changeQuote(direction = 1) {
+    setQuoteDirection(direction);
+    setQuoteIndex(current => (current + direction + exampleSoulQuotes.length) % exampleSoulQuotes.length);
+  }
+
+  function handleQuotePointerDown(event: React.PointerEvent<HTMLButtonElement>) {
+    quotePointerStart.current = { x: event.clientX, y: event.clientY };
+    quoteSwiped.current = false;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleQuotePointerUp(event: React.PointerEvent<HTMLButtonElement>) {
+    const start = quotePointerStart.current;
+    quotePointerStart.current = null;
+    if (!start) return;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.abs(deltaX) > 42 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      quoteSwiped.current = true;
+      changeQuote(deltaX < 0 ? 1 : -1);
+    }
+  }
+
+  function handleQuoteClick() {
+    if (quoteSwiped.current) {
+      quoteSwiped.current = false;
+      return;
+    }
+    changeQuote();
+  }
+
+  function toggleStats() {
+    if (!expanded) {
+      document.body.classList.add("soul-sheet-open");
+      document.body.classList.remove("soul-sheet-closing");
+      const nav = document.querySelector<HTMLElement>(".mobile-nav");
+      if (nav) nav.inert = true;
+    } else {
+      document.body.classList.add("soul-sheet-closing");
+    }
+    setExpanded(value => !value);
+  }
+
+  function closeStats() {
+    document.body.classList.add("soul-sheet-closing");
+    setExpanded(false);
+  }
+
+  function finishSheetExit() {
+    document.body.classList.remove("soul-sheet-open");
+    document.body.classList.remove("soul-sheet-closing");
     const nav = document.querySelector<HTMLElement>(".mobile-nav");
-    const updateOffset = () => root.style.setProperty("--soul-sheet-offset", `${nav?.getBoundingClientRect().height ?? 0}px`);
-    updateOffset();
-    const observer = nav ? new ResizeObserver(updateOffset) : null;
-    if (nav && observer) observer.observe(nav);
-    window.addEventListener("resize", updateOffset);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", updateOffset);
-    };
+    if (nav) nav.inert = false;
+    if (orbRef.current && document.body.contains(orbRef.current)) orbRef.current.focus({ preventScroll: true });
+  }
+
+  useEffect(() => () => {
+    document.body.classList.remove("soul-sheet-open");
+    document.body.classList.remove("soul-sheet-closing");
+    const nav = document.querySelector<HTMLElement>(".mobile-nav");
+    if (nav) nav.inert = false;
   }, []);
 
   useEffect(() => {
     if (!expanded) return;
-    document.body.classList.add("soul-sheet-open");
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setExpanded(false); };
+    const nav = document.querySelector<HTMLElement>(".mobile-nav");
+    if (nav) nav.inert = true;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { closeStats(); return; }
+      if (event.key !== "Tab") return;
+      const items = sheetRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      if (!items?.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
     window.addEventListener("keydown", onKeyDown);
     const focusTimer = window.setTimeout(() => closeButtonRef.current?.focus({ preventScroll: true }), 80);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.clearTimeout(focusTimer);
-      document.body.classList.remove("soul-sheet-open");
-      if (orbRef.current && document.body.contains(orbRef.current)) orbRef.current.focus({ preventScroll: true });
     };
   }, [expanded]);
 
-  return <section className={`soul-stage ${expanded ? "is-expanded" : ""} select-none`}>
+  useEffect(() => {
+    setSelectedDate(today());
+  }, [cycle?.id]);
+
+  return <section className={`soul-stage ${expanded ? "is-expanded" : ""} select-none`} style={orbStyle}>
+    <header className="soul-stage-header date-topbar">
+      <time dateTime={selectedDate} aria-live="polite">
+        <span>{selectedDateParts.weekday}</span>
+        <strong>{selectedDateParts.day}</strong>
+        <span>de {selectedDateParts.month} {selectedDateParts.year}</span>
+      </time>
+    </header>
+    <button
+      className="soul-quote"
+      type="button"
+      aria-label={`Frase de ${exampleSoulQuotes[quoteIndex].author}. Activa para cambiar de frase.`}
+      onClick={handleQuoteClick}
+      onPointerDown={handleQuotePointerDown}
+      onPointerUp={handleQuotePointerUp}
+      onPointerCancel={() => { quotePointerStart.current = null; }}
+    >
+      <AnimatePresence initial={false} mode="wait" custom={quoteDirection}>
+        <motion.span
+          key={quoteIndex}
+          className="soul-quote-content"
+          custom={quoteDirection}
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: quoteDirection * 18 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: quoteDirection * -18 }}
+          transition={{ duration: reduceMotion ? .12 : .28, ease: [0.2, 0, 0, 1] }}
+        >
+          <span className="soul-quote-text">“{exampleSoulQuotes[quoteIndex].text}”</span>
+          <span className="soul-quote-author">{exampleSoulQuotes[quoteIndex].author}</span>
+        </motion.span>
+      </AnimatePresence>
+    </button>
     <motion.button
       ref={orbRef}
-      className={`soul-orbit orb-effect-${settings.effect} ${soul.status === "dead" ? "is-dead" : ""} reaction-${reaction}`}
+      className={`soul-orbit orb-effect-${settings.effect} orb-variant-${settings.variant} ${soul.status === "dead" ? "is-dead" : ""} reaction-${reaction}`}
       style={orbStyle}
       type="button"
       aria-expanded={expanded}
-      aria-label={`${status}, ${cleanDays} días de pureza. ${expanded ? "Ocultar" : "Ver"} estadísticas`}
-      onClick={() => setExpanded(value => !value)}
+       aria-label={`${status}, ${cleanDays} días de pureza actuales. Fecha seleccionada: ${formatLongDate(selectedDate)}. ${expanded ? "Ocultar" : "Ver"} estadísticas`}
+      onClick={toggleStats}
       whileTap={{ scale: .97 }}
       animate={{ scale: 1 }}
       transition={{ duration: .35, ease: [0.4, 0, 0.2, 1] }}
@@ -87,32 +190,37 @@ export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsCha
       </span>
       <span className="orb-readout" aria-hidden="true"><strong>{cleanDays}</strong><small>{cycle?.goalDays ? `/${cycle.goalDays}` : ""}</small></span>
     </motion.button>
-    {createPortal(<AnimatePresence initial={false}>
+      {cycle && <DateCompass cycleStartDate={cycle.startDate} onDateChange={setSelectedDate} />}
+      {createPortal(<AnimatePresence initial={false} onExitComplete={finishSheetExit}>
       {expanded && <React.Fragment key="soul-sheet">
-        <motion.div className="soul-sheet-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .2, ease: [0.2, 0, 0, 1] }} onClick={() => setExpanded(false)} />
+        <motion.div className="soul-sheet-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: .2, ease: [0.2, 0, 0, 1] } }} exit={{ opacity: 0, transition: { duration: reduceMotion ? .14 : .36, ease: [0.32, 0, .7, 0] } }} onClick={closeStats} />
         <motion.section
+          ref={sheetRef}
           className="soul-sheet"
           role="dialog"
+          aria-modal="true"
           aria-labelledby="soul-sheet-title"
           initial={{ y: reduceMotion ? 24 : "100%" }}
-          animate={{ y: 0 }}
-          exit={{ y: reduceMotion ? 24 : "100%" }}
-          transition={reduceMotion ? { duration: .18, ease: [0.2, 0, 0, 1] } : { type: "spring", stiffness: 380, damping: 38, mass: .9 }}
+          animate={{ y: 0, transition: reduceMotion ? { duration: .18, ease: [0.2, 0, 0, 1] } : { type: "spring", stiffness: 380, damping: 38, mass: .9 } }}
+          exit={{ y: reduceMotion ? 24 : "100%", transition: reduceMotion ? { duration: .16, ease: [0.32, 0, .7, 0] } : { duration: .36, ease: [0.32, 0, .7, 0] } }}
         >
           <span className="soul-sheet-grabber" aria-hidden="true" />
-          <header className="soul-sheet-head">
-            <div><span className="soul-sheet-eyebrow" title={soul.name}>{soul.name}</span><h2 id="soul-sheet-title">{soul.status === "dead" ? "Memoria de la soul" : "Estado del ciclo"}</h2></div>
-            <button ref={closeButtonRef} className="soul-sheet-close" type="button" aria-label="Cerrar panel" onClick={() => setExpanded(false)}><X aria-hidden="true" /></button>
-          </header>
-          <div className="soul-stats soul-sheet-stats">
+           <header className="soul-sheet-head">
+             <div><span className="soul-sheet-eyebrow" title={soul.name}>{soul.name}</span><h2 id="soul-sheet-title">{soul.status === "dead" ? "Memoria de la soul" : "Estado del ciclo"}</h2></div>
+             <div className="soul-sheet-head-actions">
+               <SoulCustomizer settings={settings} onSettingsChange={onSettingsChange} />
+               <button ref={closeButtonRef} className="soul-sheet-close" type="button" aria-label="Cerrar panel" onClick={closeStats}><X aria-hidden="true" /></button>
+             </div>
+           </header>
+           <div className="soul-stats soul-sheet-stats">
             <div><CircleDashed aria-hidden="true" /><span className="soul-stat-label">Ciclo</span><strong>{cycle?.cycleNumber ?? "—"}</strong></div>
             <div><Sparkles aria-hidden="true" /><span className="soul-stat-label">Días limpios</span><strong>{cleanDays}</strong></div>
             <div><Check aria-hidden="true" /><span className="soul-stat-label">Mínimo</span><strong>{cycle?.minCleanDays ?? "—"}</strong></div>
-            <div><Trophy aria-hidden="true" /><span className="soul-stat-label">Meta</span><strong>{cycle?.goalDays ?? "—"}</strong></div>
+            <div><Target aria-hidden="true" /><span className="soul-stat-label">Meta</span><strong>{cycle?.goalDays ?? "—"}</strong></div>
             <div><Trophy aria-hidden="true" /><span className="soul-stat-label">Máximo</span><strong>{soul.maxPurityDays}</strong></div>
             <div className="soul-stat-date"><CalendarDays aria-hidden="true" /><span className="soul-stat-label">Inicio</span><time dateTime={cycle?.startDate}>{cycle ? formatDate(cycle.startDate) : "—"}</time></div>
-          </div>
-          {cycle && cycle.goals.length > 1 && <div className="soul-goal-history" aria-label="Historial de metas">
+           </div>
+           {cycle && cycle.goals.length > 1 && <div className="soul-goal-history" aria-label="Historial de metas">
             <span>Metas fijadas</span>
             <div>{cycle.goals.map(goal => <span key={goal.createdAt + goal.days}>{goal.days} días</span>)}</div>
           </div>}
@@ -124,9 +232,9 @@ export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsCha
 
 export function SoulMemory({ souls }: { souls: SoulType[] }) {
   const [selected, setSelected] = useState<string | null>(souls[0]?.id ?? null);
-  return <section className="memory-section" aria-labelledby="memory-title">
+  return <section className="memory-section" aria-label="Memoria de souls">
     <header className="memory-head">
-      <div><span className="eyebrow">Memoria</span><h3 id="memory-title">Souls que fueron</h3></div>
+      <span className="eyebrow">Memoria</span>
       <span className="memory-count" aria-label={`${souls.length} souls archivadas`}>{souls.length}</span>
     </header>
     {souls.length === 0
@@ -159,17 +267,65 @@ export function SoulMemory({ souls }: { souls: SoulType[] }) {
 
 export function SoulCustomizer({ settings, onSettingsChange }: { settings: OrbSettings; onSettingsChange: (patch: Partial<OrbSettings>) => void }) {
   const [open, setOpen] = useState(false);
-  return <div className={`soul-customizer ${open ? "is-open" : ""}`}>
-    <button className="orb-customizer-trigger" type="button" title="Personalizar soul" aria-label="Personalizar soul" aria-expanded={open} onClick={() => setOpen(value => !value)}>
-      <SlidersHorizontal aria-hidden="true" /><span>Personalizar</span>
-    </button>
-    <AnimatePresence>
-      {open && <motion.div className="soul-customizer-panel" role="group" aria-label="Personalizar soul" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .2 }}>
-        <div className="customizer-panel-heading"><div><strong>Personalizar soul</strong><span>Ajustá su apariencia y movimiento</span></div><button type="button" aria-label="Cerrar personalizador" onClick={() => setOpen(false)}><X aria-hidden="true" /></button></div>
-        <div className="customizer-control"><div className="customizer-label"><Palette aria-hidden="true" /><span>Color</span></div><div className="orb-palette-options" role="radiogroup" aria-label="Color del orbe">{(Object.entries(orbPalettes) as [OrbPalette, typeof orbPalettes[OrbPalette]][]).map(([key, palette]) => <button key={key} type="button" className={`orb-palette ${settings.palette === key ? "selected" : ""}`} style={{ "--swatch-one": palette.one, "--swatch-two": palette.two } as React.CSSProperties} aria-label={palette.label} aria-pressed={settings.palette === key} onClick={() => onSettingsChange({ palette: key })}><span /></button>)}</div></div>
-        <div className="customizer-control"><div className="customizer-label"><Waves aria-hidden="true" /><span>Movimiento</span></div><div className="orb-effect-options" role="group" aria-label="Movimiento">{orbEffects.map(effect => { const EffectIcon = effect.icon; return <button key={effect.id} type="button" title={effect.label} aria-label={effect.label} aria-pressed={settings.effect === effect.id} onClick={() => onSettingsChange({ effect: effect.id })}><EffectIcon aria-hidden="true" /><span>{effect.label}</span></button>; })}</div></div>
-        <label className="customizer-control customizer-size"><span className="customizer-label"><Minimize2 aria-hidden="true" /><span>Tamaño</span><Maximize2 aria-hidden="true" /></span><input aria-label="Tamaño del orbe" type="range" min="1.5" max="3" step="0.1" value={settings.size} onChange={event => onSettingsChange({ size: Number(event.target.value) })} /></label>
-      </motion.div>}
-    </AnimatePresence>
-  </div>;
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!open) return;
+    document.body.classList.add("appearance-open");
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setOpen(false); return; }
+      if (event.key !== "Tab") return;
+      const items = panelRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      if (!items?.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    closeRef.current?.focus({ preventScroll: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.classList.remove("appearance-open");
+      if (triggerRef.current && document.body.contains(triggerRef.current)) triggerRef.current.focus({ preventScroll: true });
+    };
+  }, [open]);
+
+  return <>
+    <div className={`soul-customizer ${open ? "is-open" : ""}`}>
+      <button ref={triggerRef} className="orb-customizer-trigger" type="button" title="Personalizar apariencia" aria-label="Personalizar apariencia" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+        <SlidersHorizontal aria-hidden="true" /><span>Apariencia</span>
+      </button>
+    </div>
+    {createPortal(<AnimatePresence initial={false}>
+      {open && <>
+        <motion.button className="appearance-scrim" type="button" aria-label="Cerrar apariencia" onClick={() => setOpen(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduceMotion ? .12 : .22 }} />
+        <motion.section ref={panelRef} className="soul-customizer-panel" role="dialog" aria-modal="true" aria-labelledby="appearance-title" initial={{ opacity: 0, y: reduceMotion ? 12 : 28, scale: .985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: reduceMotion ? 12 : 20, scale: .99 }} transition={reduceMotion ? { duration: .14 } : { type: "spring", stiffness: 340, damping: 32 }}>
+          <span className="appearance-grabber" aria-hidden="true" />
+          <div className="customizer-panel-heading"><h2 id="appearance-title" className="sr-only">Personalización de la interfaz y el orbe</h2><button ref={closeRef} type="button" aria-label="Cerrar personalizador" onClick={() => setOpen(false)}><X aria-hidden="true" /></button></div>
+          <div className="customizer-control">
+            <div className="customizer-label"><Palette aria-hidden="true" /><span>Tono de la app</span></div>
+            <div className="appearance-palette-options" role="group" aria-label="Tono de la app">
+              {(Object.entries(orbPalettes) as [OrbPalette, typeof orbPalettes[OrbPalette]][]).map(([key, palette]) => <button key={key} type="button" className={`appearance-palette ${settings.palette === key ? "selected" : ""}`} style={{ "--swatch-one": palette.one, "--swatch-two": palette.two } as React.CSSProperties} aria-label={palette.label} aria-pressed={settings.palette === key} onClick={() => onSettingsChange({ palette: key })}><span /><small>{palette.label}</small></button>)}
+            </div>
+          </div>
+          <div className="customizer-control">
+            <div className="customizer-label"><Sparkles aria-hidden="true" /><span>Estilo del orbe</span></div>
+            <div className="orb-variant-options" role="group" aria-label="Estilo del orbe">
+              {orbVariants.map(variant => { const VariantIcon = variant.icon; return <button key={variant.id} type="button" className={`orb-variant-option ${settings.variant === variant.id ? "selected" : ""}`} aria-label={variant.label} aria-pressed={settings.variant === variant.id} onClick={() => onSettingsChange({ variant: variant.id })}><span className={`variant-preview orb-variant-${variant.id}`} aria-hidden="true"><i /></span><span>{variant.label}</span><VariantIcon aria-hidden="true" /></button>; })}
+            </div>
+          </div>
+          <div className="customizer-control">
+            <div className="customizer-label"><Waves aria-hidden="true" /><span>Movimiento</span></div>
+            <div className="orb-effect-options" role="group" aria-label="Movimiento">{orbEffects.map(effect => { const EffectIcon = effect.icon; return <button key={effect.id} type="button" title={effect.label} aria-label={effect.label} aria-pressed={settings.effect === effect.id} onClick={() => onSettingsChange({ effect: effect.id })}><EffectIcon aria-hidden="true" /><span>{effect.label}</span></button>; })}</div>
+          </div>
+          <label className="customizer-control customizer-size"><span className="customizer-label"><Minimize2 aria-hidden="true" /><span>Tamaño</span><Maximize2 aria-hidden="true" /></span><input aria-label="Tamaño del orbe" type="range" min="1.5" max="3" step="0.1" value={settings.size} onChange={event => onSettingsChange({ size: Number(event.target.value) })} /></label>
+          <button className="appearance-done" type="button" onClick={() => setOpen(false)}>Listo</button>
+        </motion.section>
+      </>}
+    </AnimatePresence>, document.body)}
+  </>;
 }

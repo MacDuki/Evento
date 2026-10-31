@@ -1,15 +1,15 @@
 ﻿import {
   AlertTriangle, ArrowUpRight, CalendarDays, Check, CheckCircle2, CircleDashed,
   CircleX, Edit3, ImagePlus, LoaderCircle, Mail, Plus, RotateCcw,
-  Send, Sparkles, Trash2, Trophy, UserRound, Users, X
+  Send, Sparkles, Target, Trash2, Trophy, UserRound, Users, X
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NoSoul, EmptySoulOrb } from "./components/common/EmptySoul.js";
 import { Navigation } from "./components/layout/Navigation.js";
-import { defaultOrbSettings, statusLabels } from "./constants/app.js";
+import { defaultOrbSettings, orbPalettes, statusLabels } from "./constants/app.js";
 import { CycleOnboarding } from "./pages/Onboarding/CycleOnboarding.js";
-import { Soul, SoulCustomizer, SoulMemory } from "./pages/Soul/Soul.js";
+import { Soul, SoulMemory } from "./pages/Soul/Soul.js";
 import { api, isQueued } from "./services/api.js";
 import type { AppState, Contact, Cycle, OrbSettings, Soul as SoulType, SoulReaction, View } from "./types.js";
 import { formatDate, today } from "./utils/dates.js";
@@ -50,7 +50,26 @@ export function App() {
   const [orbSettings, setOrbSettings] = useState<OrbSettings>(() => {
     try {
       const saved = localStorage.getItem("soul-orb-settings");
-      return saved ? { ...defaultOrbSettings, ...JSON.parse(saved) } : defaultOrbSettings;
+      if (!saved) return defaultOrbSettings;
+      const parsed = JSON.parse(saved) as Partial<OrbSettings> & { palette?: string };
+      const legacyPalettes: Record<string, OrbSettings["palette"]> = { ember: "amber", forest: "neutral", ocean: "ice", violet: "lavender" };
+      const palette = parsed.palette && Object.hasOwn(orbPalettes, parsed.palette)
+        ? parsed.palette as OrbSettings["palette"]
+        : legacyPalettes[parsed.palette ?? ""] ?? defaultOrbSettings.palette;
+      const effects = ["liquid", "calm", "pulse"] as const;
+      const variants = ["liquid", "prism", "diamond", "triangle"] as const;
+      const legacyVariants: Record<string, OrbSettings["variant"]> = { crystal: "diamond", halo: "triangle" };
+      const variant = variants.includes(parsed.variant as typeof variants[number])
+        ? parsed.variant as OrbSettings["variant"]
+        : legacyVariants[parsed.variant ?? ""] ?? defaultOrbSettings.variant;
+      return {
+        ...defaultOrbSettings,
+        ...parsed,
+        palette,
+        effect: effects.includes(parsed.effect as typeof effects[number]) ? parsed.effect as OrbSettings["effect"] : defaultOrbSettings.effect,
+        variant,
+        size: typeof parsed.size === "number" && Number.isFinite(parsed.size) ? Math.min(3, Math.max(1.5, parsed.size)) : defaultOrbSettings.size
+      };
     } catch { return defaultOrbSettings; }
   });
 
@@ -111,6 +130,15 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [soulReaction]);
 
+  useEffect(() => {
+    const palette = orbPalettes[orbSettings.palette];
+    const root = document.documentElement;
+    root.dataset.theme = orbSettings.palette;
+    root.style.setProperty("--accent", palette.accent);
+    root.style.setProperty("--accent-strong", palette.accentStrong);
+    root.style.setProperty("--accent-soft", palette.accentSoft);
+  }, [orbSettings.palette]);
+
   function updateOrbSettings(patch: Partial<OrbSettings>) {
     setOrbSettings(current => {
       const next = { ...current, ...patch };
@@ -120,6 +148,7 @@ export function App() {
     if (patch.palette) setSoulReaction("color");
     else if (patch.effect) setSoulReaction("effect");
     else if (patch.size) setSoulReaction("size");
+    else if (patch.variant) setSoulReaction("variant");
   }
 
   async function createUser() {
@@ -302,14 +331,16 @@ export function App() {
       setSouls([]);
       setContacts([]);
       setProfilePhoto("");
+      setOrbSettings(defaultOrbSettings);
+      setView("dashboard");
     } catch { showMessage("No se pudo borrar", "error"); }
     finally { setPendingAction(""); }
   }
 
   if (!userId) return <main className="onboarding">
-    <div className="brand"><span className="sr-only">En calma</span></div>
     <section className="welcome">
       <EmptySoulOrb />
+      <div className="welcome-copy-block"><h1>Un día <em>a la vez.</em></h1></div>
       <button className="primary empty-primary" type="button" disabled={pendingAction === "profile"} onClick={() => void createUser()}>
         <span>Entrar</span>{pendingAction === "profile" ? <LoaderCircle className="spin" aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}
       </button>
@@ -317,7 +348,7 @@ export function App() {
   </main>;
 
   if (isLoading) return <main className="loading-screen">
-    <div className="brand"><span className="sr-only">En calma</span></div>
+    <div className="brand"><span className="brand-mark" aria-hidden="true" />En calma</div>
     <section className="loading-stage" aria-live="polite"><span className="loading-orb" aria-hidden="true" /><span className="sr-only">Cargando</span></section>
   </main>;
 
@@ -340,7 +371,7 @@ export function App() {
   />;
 
   return <main className="app-shell">
-    <aside className="sidebar"><div className="brand"><span className="sr-only">En calma</span></div><Navigation view={view} setView={setView} /></aside>
+    <aside className="sidebar"><div className="brand"><span className="brand-mark" aria-hidden="true" />En calma</div><Navigation view={view} setView={setView} /></aside>
     <a className="skip-link" href="#main-content">Saltar al contenido</a>
     <section className="content" id="main-content">
       <div className="mobile-nav"><Navigation view={view} setView={setView} /></div>
@@ -359,34 +390,28 @@ export function App() {
               <header className="soul-management-head">
                 <div className="soul-identity">
                   <h2>{focusSoul.name}</h2>
-                  <span className={`status-pip ${focusSoul.status === "alive" ? "online" : ""}`} title={focusSoul.status === "alive" ? "Soul viva" : "Soul muerta"} />
                   <span className="sr-only">{focusSoul.status === "alive" ? "Soul viva" : "Soul muerta"}</span>
                 </div>
                 <div className="soul-management-tools">
-                  <SoulCustomizer settings={orbSettings} onSettingsChange={updateOrbSettings} />
+                  {focusSoul.status === "alive" && activeCycle && <button className={`icon-action ${goalReached || activeCycle.goalDays === null ? "primary-icon" : "quiet-icon"}`} type="button" title={activeCycle.goalDays === null ? "Fijar meta" : "Ampliar meta"} aria-label={activeCycle.goalDays === null ? "Fijar meta" : "Ampliar meta"} disabled={activeCycle.goalDays !== null && !goalReached} onClick={openGoalDialog}><Target aria-hidden="true" /></button>}
                   <div className="management-top-actions">
                     {activeSoul && activeCycle && <button className="icon-action danger-icon" type="button" title="Admitir consumo" aria-label="Admitir consumo" disabled={pendingAction === "consumption"} onClick={openConsumption}>{pendingAction === "consumption" ? <LoaderCircle className="spin" aria-hidden="true" /> : <AlertTriangle aria-hidden="true" />}</button>}
                     {focusSoul.status === "alive" && !isRenaming && <button className="icon-action quiet-icon" type="button" title="Renombrar" aria-label="Renombrar" onClick={() => { setRenameValue(focusSoul.name); setIsRenaming(true); }}><Edit3 aria-hidden="true" /></button>}
                   </div>
                   <div className="management-max" title="Máximo de días"><Trophy aria-hidden="true" /><strong>{focusSoul.maxPurityDays}</strong><span className="sr-only">Máximo de {focusSoul.maxPurityDays} días</span></div>
                 </div>
+                {focusSoul.status === "alive" && isRenaming && <form className="rename-form" onSubmit={event => { event.preventDefault(); void renameSoul(); }}>
+                  <label className="sr-only" htmlFor="rename-soul">Nombre</label>
+                  <input id="rename-soul" value={renameValue} maxLength={40} autoFocus onChange={event => setRenameValue(event.target.value)} />
+                  <div>
+                    <button className="icon-action primary-icon" type="submit" title="Guardar" aria-label="Guardar" disabled={!renameValue.trim()}><Check aria-hidden="true" /></button>
+                    <button className="icon-action quiet-icon" type="button" title="Cancelar" aria-label="Cancelar" onClick={() => setIsRenaming(false)}><X aria-hidden="true" /></button>
+                  </div>
+                </form>}
               </header>
 
-              {focusSoul.status === "alive" && isRenaming && <form className="rename-form" onSubmit={event => { event.preventDefault(); void renameSoul(); }}>
-                <label className="sr-only" htmlFor="rename-soul">Nombre</label>
-                <input id="rename-soul" value={renameValue} maxLength={40} autoFocus onChange={event => setRenameValue(event.target.value)} />
-                <div>
-                  <button className="icon-action primary-icon" type="submit" title="Guardar" aria-label="Guardar" disabled={!renameValue.trim()}><Check aria-hidden="true" /></button>
-                  <button className="icon-action quiet-icon" type="button" title="Cancelar" aria-label="Cancelar" onClick={() => setIsRenaming(false)}><X aria-hidden="true" /></button>
-                </div>
-              </form>}
-
               {focusSoul.status === "alive" && activeCycle && <div className="management-goal-row">
-                {activeCycle.goalDays === null
-                  ? <button className="goal-action" type="button" onClick={openGoalDialog}>Fijar meta</button>
-                  : goalReached
-                    ? <button className="goal-action is-reached" type="button" onClick={openGoalDialog}>Ampliar meta</button>
-                    : <span className="goal-note">Meta actual: {activeCycle.goalDays} días. Se puede ampliar al alcanzarla.</span>}
+                {activeCycle.goalDays !== null && !goalReached && <span className="goal-note">Meta actual: {activeCycle.goalDays} días.</span>}
                 <span className="goal-min">Mínimo {activeCycle.minCleanDays}</span>
               </div>}
 
@@ -412,7 +437,7 @@ export function App() {
             </section>
             : <NoSoul onCreate={startNewSoul} />)}
 
-          {view === "coach" && <section className="coach-page"><section className="reflection-panel">
+          {view === "coach" && <section className="coach-page"><header className="screen-heading"><span className="screen-heading-icon"><Sparkles aria-hidden="true" /></span><div><span className="eyebrow">Un espacio para vos</span><h1>Coach</h1></div></header><section className="reflection-panel">
             <div className="composer-sigil" aria-hidden="true"><Sparkles /></div>
             <label className="sr-only" htmlFor="reflection">Tu reflexión</label>
             <textarea id="reflection" rows={8} maxLength={10000} value={reflection} onChange={event => setReflection(event.target.value)} placeholder="Escribí…" />
@@ -425,12 +450,13 @@ export function App() {
 
           {view === "contacts" && <section className="contacts-page">
             <header className="contacts-top">
+              <div className="screen-heading"><span className="screen-heading-icon"><Users aria-hidden="true" /></span><div><span className="eyebrow">Acompañamiento</span><h1>Tu red</h1></div></div>
               <div className="contact-cluster" aria-label={`${contacts.length} contactos`}>{contacts.length ? contacts.slice(0, 4).map(contact => <span className="cluster-avatar" key={contact.id}>{contact.contact_name.charAt(0).toUpperCase()}</span>) : <Users aria-hidden="true" />}</div>
               <button className="icon-action primary-icon" type="button" title="Añadir contacto" aria-label="Añadir contacto" aria-expanded={contactFormOpen} onClick={() => setContactFormOpen(value => !value)}>{contactFormOpen ? <X aria-hidden="true" /> : <Plus aria-hidden="true" />}</button>
             </header>
             <AnimatePresence>{contactFormOpen && <motion.form className="contact-form" initial={{ opacity: 0, y: -8, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: .98 }} transition={{ duration: .2, ease: [0.2, 0, 0, 1] }} onSubmit={event => { event.preventDefault(); void addContact(); }}>
-              <div className="field"><label className="sr-only" htmlFor="contact-name">Nombre</label><input id="contact-name" value={contactName} onChange={event => setContactName(event.target.value)} placeholder="Nombre" /></div>
-              <div className="field"><label className="sr-only" htmlFor="contact-email">Correo</label><input id="contact-email" type="email" value={contactEmail} onChange={event => setContactEmail(event.target.value)} placeholder="correo@…" /></div>
+              <div className="field"><label htmlFor="contact-name">Nombre</label><input id="contact-name" value={contactName} onChange={event => setContactName(event.target.value)} placeholder="Nombre" /></div>
+              <div className="field"><label htmlFor="contact-email">Correo electrónico</label><input id="contact-email" type="email" value={contactEmail} onChange={event => setContactEmail(event.target.value)} placeholder="correo@…" /></div>
               <button className="icon-action primary-icon" type="submit" title="Añadir" aria-label="Añadir" disabled={!contactName.trim() || !contactEmail.trim() || pendingAction === "contact"}>{pendingAction === "contact" ? <LoaderCircle className="spin" aria-hidden="true" /> : <Check aria-hidden="true" />}</button>
             </motion.form>}</AnimatePresence>
             <section className="contact-list" aria-label="Contactos">{contacts.length === 0
@@ -446,9 +472,9 @@ export function App() {
               })}</section>
           </section>}
 
-          {view === "profile" && <section className="profile-page"><section className="profile-panel">
-            <div className="profile-photo-row"><div className="profile-avatar">{profilePhoto ? <img src={profilePhoto} alt="Foto de perfil" /> : <UserRound aria-hidden="true" />}<label className="photo-upload" title="Cambiar foto"><ImagePlus aria-hidden="true" /><span className="sr-only">Cambiar foto</span><input type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) saveProfilePhoto(file); event.target.value = ""; }} /></label></div></div>
-            <button className="danger-tile" type="button" onClick={() => setConfirming("delete")}><span>Borrar</span><Trash2 aria-hidden="true" /></button>
+          {view === "profile" && <section className="profile-page"><header className="screen-heading"><span className="screen-heading-icon"><UserRound aria-hidden="true" /></span><div><span className="eyebrow">Tu espacio</span><h1>Yo</h1></div></header><section className="profile-panel">
+            <div className="profile-photo-row"><div className="profile-avatar">{profilePhoto ? <img src={profilePhoto} alt="Foto de perfil" /> : <UserRound aria-hidden="true" />}<label className="photo-upload" title="Cambiar foto"><ImagePlus aria-hidden="true" /><span className="sr-only">Cambiar foto</span><input type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) saveProfilePhoto(file); event.target.value = ""; }} /></label></div><div className="profile-copy"><strong>Tu perfil</strong><span>Una experiencia hecha a tu manera.</span></div></div>
+            <button className="danger-tile" type="button" onClick={() => setConfirming("delete")}><span>Borrar mis datos</span><Trash2 aria-hidden="true" /></button>
           </section></section>}
 
         </motion.div></AnimatePresence>}

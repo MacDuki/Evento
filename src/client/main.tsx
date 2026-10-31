@@ -4,6 +4,7 @@ import { App } from "./App.js";
 import "./styles/global.css";
 import "./styles/layout.css";
 import "./styles/soul.css";
+import "./styles/redesign.css";
 import { api } from "./services/api.js";
 import { flush, type QueuedRequest } from "./offline.js";
 

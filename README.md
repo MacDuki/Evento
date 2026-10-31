@@ -78,11 +78,13 @@ Ejemplos:
 
 ## Navegación del frontend
 
-- **Hoy**: orbe de la soul viva. Al tocarlo se abre el panel con ciclo, días limpios, mínimo, meta, máximo y fecha de inicio. Si la soul murió, se muestra el orbe muerto, su máxima pureza y la CTA **Nueva soul**.
+- **Hoy**: home mobile-first con el orbe como protagonista. Al tocarlo se abre el panel con ciclo, días limpios, mínimo, meta, máximo y fecha de inicio. Si la soul murió, se muestra el orbe muerto, su máxima pureza y la CTA **Nueva soul**.
 - **Soul**: identidad, renombre, máximo histórico, historial de ciclos, acciones de meta y consumo. Incluye **Memoria**, donde se consultan las souls muertas y sus ciclos.
 - **Coach**: reflexión libre y feedback opcional. El coach no altera estados ni reglas.
 - **Red**: contactos de responsabilidad.
-- **Yo**: foto local y borrado completo de los datos.
+- **Yo**: foto local, personalización de la interfaz/orbe y borrado completo de los datos.
+
+La apariencia parte de una paleta neutra oscura. Se puede elegir entre seis acentos, cuatro estilos de orbe (Líquido, Prisma, Rombo y Triángulo) y tres movimientos (Fluido, Calmo y Pulso); los ajustes se guardan localmente.
 
 El consumo se registra únicamente desde la pantalla Soul, con el botón de advertencia. El modal permite elegir la fecha y una amplitud opcional para la meta del ciclo siguiente. Si la amplitud queda vacía, el ciclo siguiente nace sin meta.
 

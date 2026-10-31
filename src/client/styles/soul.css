@@ -293,7 +293,7 @@
 .soul-stage { min-height: 570px; padding: 0 0 28px; }
 .soul-stage-header { width: min(100%, 720px); min-height: 44px; align-items: flex-start; justify-content: flex-end; }
 .soul-orbit { margin-top: 20px; overflow: visible; }
-.orb-progress-ring { position: absolute; z-index: 0; inset: 3%; border-radius: 50%; background: conic-gradient(from -90deg, var(--accent) var(--progress), rgba(169, 234, 216, .09) 0); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); box-shadow: 0 0 26px rgba(169, 234, 216, .11); }
+.orb-progress-ring { position: absolute; z-index: 0; border-radius: 50%; background: conic-gradient(from -90deg, var(--accent) var(--progress), rgba(169, 234, 216, .09) 0); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); box-shadow: 0 0 26px rgba(169, 234, 216, .11); }
 .soul-orb-loader { z-index: 1; }
 .orb-readout { position: relative; z-index: 2; display: inline-flex; align-items: baseline; gap: 3px; pointer-events: none; text-shadow: 0 3px 22px rgba(2, 12, 15, .85); }
 .orb-readout strong { color: #f6fffd; font-size: clamp(40px, 8vw, 55px); font-weight: 500; letter-spacing: -.075em; }
@@ -326,7 +326,7 @@
 .coach-page,
 .contacts-page,
 .profile-page { width: min(100%, 760px); margin: 0 auto; padding-top: 16px; }
-.soul-management-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.soul-management-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .soul-management-tools { position: relative; display: flex; align-items: center; gap: 10px; }
 .management-top-actions { display: flex; align-items: center; gap: 10px; }
 .soul-customizer { position: relative; z-index: 5; }
@@ -377,7 +377,7 @@
   outline: none;
   box-shadow: none;
 }
-.rename-form { display: flex; grid-column: 1 / -1; width: 100%; min-width: 0; align-items: center; gap: 9px; padding: 6px 7px 6px 12px; }
+.rename-form { position: absolute; top: calc(100% + 10px); right: 0; left: 0; z-index: 6; display: flex; grid-column: 1 / -1; width: 100%; min-width: 0; align-items: center; gap: 9px; padding: 6px 7px 6px 12px; }
 .rename-form input { display: block; width: 100%; min-width: 0; flex: 1 1 auto; padding: 12px 0; font-size: 16px; }
 .rename-form > div { gap: 6px; }
 .rename-form .icon-action { width: 34px; min-width: 34px; height: 34px; border-radius: 10px; }
@@ -464,7 +464,7 @@
   .management-actions { grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr); }
   .management-actions { grid-template-columns: 42px minmax(0, 1fr); }
   .event-date-field { min-width: min(100%, 230px); }
-  .rename-form { order: 3; width: 100%; }
+  .rename-form { width: 100%; }
   .coach-page { min-height: calc(100dvh - 150px); }
   .reflection-panel { min-height: 400px; padding: 22px; }
   .contacts-page { padding-top: 8px; }
@@ -645,6 +645,7 @@
 
 .soul-sheet .soul-sheet-stats {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   width: 100%;
   margin: 0;
   border: 1px solid var(--line);
@@ -652,7 +653,35 @@
 }
 
 .soul-sheet .soul-stats div {
-  min-height: 58px;
+  display: grid;
+  min-width: 0;
+  min-height: 78px;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  justify-items: start;
+  gap: 7px;
+  padding: 12px;
+  text-align: left;
+}
+
+.soul-sheet .soul-stats svg {
+  width: 14px;
+  height: 14px;
+}
+
+.soul-sheet .soul-stats strong {
+  font-size: 18px;
+  text-align: left;
+}
+
+.soul-sheet .soul-stats .soul-stat-date {
+  grid-column: auto;
+}
+
+.soul-sheet .soul-stats time {
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: normal;
 }
 
 @media (max-width: 800px) {

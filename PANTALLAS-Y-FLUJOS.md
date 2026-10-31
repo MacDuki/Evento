@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Este documento describe la interfaz implementada en `src/client/App.tsx`. La aplicación es una SPA: no hay rutas URL ni router; la pantalla visible se determina por el estado local `view`, por la existencia de `userId` en `localStorage` y por el estado de las souls.
+Este documento describe la interfaz implementada en `src/client/App.tsx`. La aplicación es una SPA mobile-first: no hay rutas URL ni router; la pantalla visible se determina por el estado local `view`, por la existencia de `userId` en `localStorage` y por el estado de las souls. En móvil, las cinco secciones viven en una barra inferior de vidrio; en pantallas grandes se usa navegación lateral.
 
 ## Mapa general
 
@@ -45,7 +45,7 @@ Tiene cuatro pasos:
 
 1. **Nombra a tu soul**: nombre obligatorio, máximo 40 caracteres.
 2. **Mínimo de días**: entero positivo obligatorio.
-3. **Meta (opcional)**: puede quedar vacía. Si se completa, debe superar el mínimo.
+3. **Tu meta**: opcional; si se completa, debe superar el mínimo.
 4. **Inicio**: **Hoy** o una **Fecha** pasada hasta hoy.
 
 Acciones:
@@ -97,13 +97,14 @@ Es la pantalla inicial. El protagonista es el orbe de la soul.
 
 #### 3.4 Personalización
 
-El panel de personalización permite cambiar:
+El panel **Apariencia**, disponible desde Hoy, Soul y Yo, permite cambiar:
 
-- color del orbe: Ámbar, Bosque, Océano o Violeta;
-- movimiento: Líquido, Calmo o Pulso;
+- tono de la interfaz: Niebla, Hielo, Lavanda, Cobalto, Ámbar o Rosa;
+- estilo del orbe: Líquido (forma original), Prisma, Rombo o Triángulo;
+- movimiento: Fluido, Calmo o Pulso;
 - tamaño.
 
-Se guarda en `localStorage` bajo `soul-orb-settings`.
+La paleta Niebla y el estilo Líquido son los valores iniciales. El tono modifica los acentos de toda la interfaz sin cambiar sus superficies oscuras neutras. Se guarda en `localStorage` bajo `soul-orb-settings`.
 
 ### 4. Soul
 
@@ -112,7 +113,7 @@ Es la pantalla de gestión y memoria.
 #### 4.1 Soul viva
 
 - Encabezado con nombre, indicador de estado y máxima pureza.
-- Botón **Personalizar**.
+- Botón **Apariencia**.
 - Botón de advertencia **Admitir consumo**.
 - Botón **Renombrar**.
 - Fila de meta:
@@ -202,7 +203,8 @@ Permite agregar contactos de responsabilidad y consultarlos.
 
 - Foto de perfil local, guardada en `localStorage` como data URL.
 - Validación de tipo de imagen y tamaño máximo de 2,5 MB.
-- Botón **Borrar** con confirmación. Ejecuta `DELETE /api/users/me`, limpia `localStorage` y vuelve a la bienvenida.
+- Acceso a la personalización global de la interfaz y del orbe.
+- Botón **Borrar mis datos** con confirmación. Ejecuta `DELETE /api/users/me`, limpia `localStorage` y vuelve a la bienvenida.
 
 ## Flujos funcionales
 
@@ -315,7 +317,7 @@ Yo
 - Los errores HTTP no se encolan ni se transforman en éxito.
 - Avisos globales temporales para éxito, error e información.
 - Pantalla de carga con orbe mientras se resuelve el estado inicial.
-- Overlays: panel de estado, personalizador, modal de consumo, modal de meta, renombre y confirmación de borrado.
+- Overlays: panel de estado, hoja de apariencia, modal de consumo, modal de meta, renombre y confirmación de borrado.
 
 ## Capacidades no implementadas
 

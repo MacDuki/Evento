@@ -1,4 +1,4 @@
-# Abstinencia Progresiva
+# En calma
 
 Aplicación local full-stack para probar un sistema de ciclos progresivos. El servidor es la fuente de verdad: calcula días desde timestamps, aplica el incremento estricto y penaliza el déficit.
 

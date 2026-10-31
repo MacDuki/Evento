@@ -2,7 +2,7 @@
 
 ## 1. Propósito
 
-Abstinencia Progresiva es una aplicación local para llevar una progresión de ciclos
+La aplicación local permite llevar una progresión de ciclos
 de abstinencia. La aplicación registra una `soul` por usuario, mide los días
 transcurridos desde el inicio de cada ciclo y decide si la progresión continúa o
 se rompe.

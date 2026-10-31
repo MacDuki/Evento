@@ -28,7 +28,7 @@ Con userId
 
 - **Cuándo aparece:** cuando no existe `localStorage.userId`.
 - **Contenido:**
-  - Marca “Abstinencia”.
+  - Nombre accesible “En calma”.
   - Mensaje de bienvenida: “La disciplina en calma”.
   - Indicación de espacio privado y local.
   - CTA **Entrar a mi espacio**.

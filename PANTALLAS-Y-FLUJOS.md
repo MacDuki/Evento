@@ -41,8 +41,10 @@ Con userId
 
 **Archivos principales:**
 
-- `src/client/main.tsx`: renderizado y creación del perfil.
-- `src/client/style.css`: estilos de onboarding.
+- `src/client/main.tsx`: punto de entrada del cliente.
+- `src/client/App.tsx`: creación del perfil y shell de aplicación.
+- `src/client/pages/Onboarding/CycleOnboarding.tsx`: flujo de onboarding.
+- `src/client/styles/layout.css`: estilos de onboarding y layout.
 - `src/components/ui/shimmer-button.tsx`: CTA de entrada.
 - `src/server/app.ts`: endpoint `POST /api/users`.
 - `src/server/db.ts`: persistencia del usuario.
@@ -76,8 +78,9 @@ Es el contenedor común de las vistas autenticadas localmente.
 
 **Archivos principales:**
 
-- `src/client/main.tsx`: shell, navegación, estados y avisos.
-- `src/client/style.css`: layout responsive y estilos compartidos.
+- `src/client/App.tsx`: shell, estados y avisos.
+- `src/client/components/layout/Navigation.tsx`: navegación compartida.
+- `src/client/styles/layout.css`: layout responsive y estilos compartidos.
 - `src/client/offline.ts`: cola de mutaciones offline.
 - `public/sw.js`: service worker registrado por la aplicación.
 - `public/manifest.json`: metadatos PWA.
@@ -131,8 +134,9 @@ Los ciclos cerrados no muestran acciones de modificación.
 
 **Archivos principales:**
 
-- `src/client/main.tsx`: dashboard, formularios, historial y acciones.
-- `src/client/style.css`: hero, progreso, formularios e historial.
+- `src/client/App.tsx`: composición del dashboard, formularios, historial y acciones.
+- `src/client/pages/Soul/Soul.tsx`: visualización y personalización de la soul.
+- `src/client/styles/layout.css`: hero, progreso, formularios e historial.
 - `src/components/ui/drawer.tsx`: panel de detalles del ciclo.
 - `src/server/app.ts`: endpoints de estado y ciclos.
 - `src/domain/cycle.ts`: validación y evaluación de reglas.
@@ -145,8 +149,8 @@ el contador, el botón de consulta y el feedback recibido.
 
 **Archivos principales:**
 
-- `src/client/main.tsx`: formulario, consulta y feedback.
-- `src/client/style.css`: estilos del panel de reflexión.
+- `src/client/App.tsx`: estado, consulta y feedback.
+- `src/client/styles/layout.css`: estilos del panel de reflexión.
 - `src/server/app.ts`: endpoint `POST /api/coach/reflection`.
 - `src/server/services.ts`: integración con OpenAI y fallback local.
 - `src/server/db.ts`: auditoría de la reflexión y respuesta.
@@ -158,8 +162,8 @@ existente.
 
 **Archivos principales:**
 
-- `src/client/main.tsx`: formulario y listado de contactos.
-- `src/client/style.css`: estilos del panel y filas de contactos.
+- `src/client/App.tsx`: composición del formulario y listado de contactos.
+- `src/client/styles/layout.css`: estilos del panel y filas de contactos.
 - `src/server/app.ts`: endpoints de contactos y estado.
 - `src/server/db.ts`: persistencia de contactos.
 - `src/server/services.ts`: notificaciones por correo cuando están habilitadas.

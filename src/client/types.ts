@@ -1,0 +1,9 @@
+export type Cycle = { id: string; cycle_number: number; min_clean_days: number; target_goal_days: number; start_date: string; planned_end_date?: string | null; status: string; deficit_days?: number };
+export type SoulState = { soul_name: string; soul_status: "alive" | "dead"; soul_max_purity_days: number };
+export type Contact = { id: string; contact_name: string; contact_email: string };
+export type View = "dashboard" | "soul" | "coach" | "contacts" | "profile";
+export type SoulReaction = "idle" | "awakening" | "success" | "progress" | "consumption" | "dead" | "rename" | "goal" | "color" | "effect" | "size";
+export type OrbPalette = "ember" | "forest" | "ocean" | "violet";
+export type OrbEffect = "liquid" | "calm" | "pulse";
+export type OrbSettings = { palette: OrbPalette; effect: OrbEffect; size: number };
+export type QueuedResult = { queued: true };

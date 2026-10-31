@@ -2355,6 +2355,15 @@ body.soul-sheet-open.soul-sheet-closing .mobile-nav {
   line-height: 1.28;
 }
 
+.soul-quote-shiny {
+  max-width: 100%;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-wrap: balance;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, .36));
+}
+
 .soul-quote-author {
   display: block;
   color: var(--accent);
@@ -2698,9 +2707,10 @@ body.soul-sheet-open.soul-sheet-closing .mobile-nav {
   display: flex;
   min-height: 44px;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 10px;
   padding: 0 2px;
+  text-align: center;
 }
 
 .date-topbar time {

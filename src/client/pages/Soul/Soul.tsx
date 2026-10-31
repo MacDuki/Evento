@@ -1,12 +1,13 @@
-﻿import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { CalendarDays, Check, CheckCircle2, ChevronDown, CircleDashed, CircleX, Maximize2, Minimize2, Palette, SlidersHorizontal, Sparkles, Target, Trophy, Waves, Wind, X } from "lucide-react";
+﻿import { CalendarDays, Check, CheckCircle2, ChevronDown, CircleDashed, CircleX, Maximize2, Minimize2, Palette, SlidersHorizontal, Sparkles, Target, Trophy, Waves, X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { orbEffects, orbPalettes, orbVariants, statusLabels } from "../../constants/app.js";
+import ShinyText from "../../../components/effects/ShinyText.js";
 import { DateCompass } from "../../components/date-compass/DateCompass.js";
+import { orbEffects, orbPalettes, orbVariants, statusLabels } from "../../constants/app.js";
 import soulQuotes from "../../data/soul-quotes.json" with { type: "json" };
+import type { Cycle, OrbPalette, OrbSettings, SoulReaction, Soul as SoulType } from "../../types.js";
 import { formatDate, formatLongDate, formatLongDateParts, today } from "../../utils/dates.js";
-import type { Cycle, OrbPalette, OrbSettings, Soul as SoulType, SoulReaction } from "../../types.js";
 
 const exampleSoulQuotes = soulQuotes;
 
@@ -154,7 +155,26 @@ export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsCha
           exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: quoteDirection * -18 }}
           transition={{ duration: reduceMotion ? .12 : .28, ease: [0.2, 0, 0, 1] }}
         >
-          <span className="soul-quote-text">“{exampleSoulQuotes[quoteIndex].text}”</span>
+          <span className="soul-quote-text">
+            <ShinyText
+              text={`“${exampleSoulQuotes[quoteIndex].text}”`}
+              color="#aeb5c5"
+              shineColor="#ffffff"
+              speed={3}
+              shineWidth={44}
+              softness={.3}
+              trigger="loop"
+              delay={0}
+              angle={120}
+              bands={1}
+              glow={0}
+              direction="left"
+              easing="smooth"
+              pauseOnHover={false}
+              disabled={reduceMotion ?? false}
+              className="soul-quote-shiny"
+            />
+          </span>
           <span className="soul-quote-author">{exampleSoulQuotes[quoteIndex].author}</span>
         </motion.span>
       </AnimatePresence>

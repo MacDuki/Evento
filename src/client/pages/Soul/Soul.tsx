@@ -1,11 +1,15 @@
-﻿import { AnimatePresence, motion } from "motion/react";
+﻿import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CalendarDays, Check, CircleDashed, Maximize2, Minimize2, Palette, SlidersHorizontal, Sparkles, Trophy, Waves, Wind, X } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { orbEffects, orbPalettes } from "../../constants/app.js";
 import { formatDate } from "../../utils/dates.js";
 import type { Cycle, OrbPalette, OrbSettings, SoulReaction, SoulState } from "../../types.js";
 export function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSettingsChange }: { cycle?: Cycle; cleanDays: number; soulStatus: SoulState["soul_status"]; reaction: SoulReaction; settings: OrbSettings; onSettingsChange: (patch: Partial<OrbSettings>) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const orbRef = useRef<HTMLButtonElement>(null);
+  const reduceMotion = useReducedMotion();
   const status = soulStatus === "dead" ? "Soul muerta" : cycle ? "Soul viva" : "Soul nueva";
   const palette = orbPalettes[settings.palette];
   const progress = cycle ? Math.min(100, Math.round((cleanDays / Math.max(cycle.target_goal_days, 1)) * 100)) : 0;
@@ -19,8 +23,38 @@ export function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSetti
     "--size": String(settings.size),
     "--progress": `${progress}%`
   } as React.CSSProperties;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const nav = document.querySelector<HTMLElement>(".mobile-nav");
+    const updateOffset = () => root.style.setProperty("--soul-sheet-offset", `${nav?.getBoundingClientRect().height ?? 0}px`);
+    updateOffset();
+    const observer = nav ? new ResizeObserver(updateOffset) : null;
+    if (nav && observer) observer.observe(nav);
+    window.addEventListener("resize", updateOffset);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateOffset);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    document.body.classList.add("soul-sheet-open");
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", onKeyDown);
+    const focusTimer = window.setTimeout(() => closeButtonRef.current?.focus({ preventScroll: true }), 80);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.clearTimeout(focusTimer);
+      document.body.classList.remove("soul-sheet-open");
+      if (orbRef.current && document.body.contains(orbRef.current)) orbRef.current.focus({ preventScroll: true });
+    };
+  }, [expanded]);
+
   return <section className={`soul-stage ${expanded ? "is-expanded" : ""} select-none`} onPointerMove={event => { const bounds = event.currentTarget.getBoundingClientRect(); event.currentTarget.style.setProperty("--pointer-x", `${((event.clientX - bounds.left) / bounds.width) * 100}%`); event.currentTarget.style.setProperty("--pointer-y", `${((event.clientY - bounds.top) / bounds.height) * 100}%`); }}>
     <motion.button
+      ref={orbRef}
       className={`soul-orbit orb-effect-${settings.effect} ${soulStatus === "dead" ? "is-dead" : ""} reaction-${reaction}`}
       style={orbStyle}
       type="button"
@@ -50,15 +84,33 @@ export function Soul({ cycle, cleanDays, soulStatus, reaction, settings, onSetti
       </span>
       <span className="orb-readout" aria-hidden="true"><strong>{cleanDays}</strong><small>{cycle ? `/${cycle.target_goal_days}` : ""}</small></span>
     </motion.button>
-    <AnimatePresence initial={false}>
-      {expanded && <motion.div className="soul-stats" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .25, ease: [0.2, 0, 0, 1] }}>
-        <div><CircleDashed aria-hidden="true" /><span className="soul-stat-label">Ciclo</span><strong>{cycle?.cycle_number ?? 1}</strong></div>
-        <div><Sparkles aria-hidden="true" /><span className="soul-stat-label">Días limpios</span><strong>{cleanDays}</strong></div>
-        <div><Check aria-hidden="true" /><span className="soul-stat-label">Mínimo</span><strong>{cycle?.min_clean_days ?? "—"}</strong></div>
-        <div><Trophy aria-hidden="true" /><span className="soul-stat-label">Meta</span><strong>{cycle?.target_goal_days ?? "—"}</strong></div>
-        <div className="soul-stat-date"><CalendarDays aria-hidden="true" /><span className="soul-stat-label">Inicio</span><time dateTime={cycle?.start_date}>{cycle ? formatDate(cycle.start_date) : "—"}</time></div>
-      </motion.div>}
-    </AnimatePresence>
+    {createPortal(<AnimatePresence initial={false}>
+      {expanded && <React.Fragment key="soul-sheet">
+        <motion.div className="soul-sheet-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .2, ease: [0.2, 0, 0, 1] }} onClick={() => setExpanded(false)} />
+        <motion.section
+          className="soul-sheet"
+          role="dialog"
+          aria-labelledby="soul-sheet-title"
+          initial={{ y: reduceMotion ? 24 : "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: reduceMotion ? 24 : "100%" }}
+          transition={reduceMotion ? { duration: .18, ease: [0.2, 0, 0, 1] } : { type: "spring", stiffness: 380, damping: 38, mass: .9 }}
+        >
+          <span className="soul-sheet-grabber" aria-hidden="true" />
+          <header className="soul-sheet-head">
+            <div><span className="soul-sheet-eyebrow">Soul</span><h2 id="soul-sheet-title">Estado del ciclo</h2></div>
+            <button ref={closeButtonRef} className="soul-sheet-close" type="button" aria-label="Cerrar panel" onClick={() => setExpanded(false)}><X aria-hidden="true" /></button>
+          </header>
+          <div className="soul-stats soul-sheet-stats">
+            <div><CircleDashed aria-hidden="true" /><span className="soul-stat-label">Ciclo</span><strong>{cycle?.cycle_number ?? 1}</strong></div>
+            <div><Sparkles aria-hidden="true" /><span className="soul-stat-label">Días limpios</span><strong>{cleanDays}</strong></div>
+            <div><Check aria-hidden="true" /><span className="soul-stat-label">Mínimo</span><strong>{cycle?.min_clean_days ?? "—"}</strong></div>
+            <div><Trophy aria-hidden="true" /><span className="soul-stat-label">Meta</span><strong>{cycle?.target_goal_days ?? "—"}</strong></div>
+            <div className="soul-stat-date"><CalendarDays aria-hidden="true" /><span className="soul-stat-label">Inicio</span><time dateTime={cycle?.start_date}>{cycle ? formatDate(cycle.start_date) : "—"}</time></div>
+          </div>
+        </motion.section>
+      </React.Fragment>}
+    </AnimatePresence>, document.body)}
   </section>;
 }
 

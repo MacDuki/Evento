@@ -552,3 +552,139 @@
     -webkit-backdrop-filter: none;
   }
 }
+
+/* Bottom sheet de estadísticas de la soul */
+.soul-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  bottom: var(--soul-sheet-offset, 0px);
+  z-index: 13;
+  background: radial-gradient(120% 85% at 50% 100%, rgba(3, 11, 14, .28), rgba(3, 11, 14, .62));
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.soul-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: max(0px, calc(var(--soul-sheet-offset, 0px) - 1px));
+  z-index: 14;
+  display: grid;
+  gap: 14px;
+  padding: 10px 18px 20px;
+  border-top: 1px solid rgba(157, 226, 209, .18);
+  border-radius: 28px 28px 0 0;
+  background: rgba(9, 20, 26, .82);
+  box-shadow: inset 0 1px 0 rgba(190, 245, 232, .14), 0 -30px 70px rgba(0, 0, 0, .42);
+  backdrop-filter: blur(26px) saturate(140%);
+  -webkit-backdrop-filter: blur(26px) saturate(140%);
+  max-height: calc(100dvh - var(--soul-sheet-offset, 0px) - 10px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  will-change: transform;
+}
+
+.soul-sheet-grabber {
+  justify-self: center;
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(191, 235, 226, .3);
+}
+
+.soul-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.soul-sheet-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.soul-sheet-eyebrow {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.soul-sheet-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -.04em;
+}
+
+.soul-sheet-close {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(171, 232, 216, .07);
+  color: var(--muted);
+}
+
+.soul-sheet-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.soul-sheet .soul-sheet-stats {
+  display: grid;
+  width: 100%;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.soul-sheet .soul-stats div {
+  min-height: 58px;
+}
+
+@media (max-width: 800px) {
+  body.soul-sheet-open {
+    overflow: hidden;
+  }
+
+  body.soul-sheet-open .mobile-nav {
+    border-top-color: transparent;
+    background: rgba(9, 20, 26, .82);
+  }
+}
+
+@media (min-width: 801px) {
+  .soul-sheet {
+    right: auto;
+    bottom: 0;
+    left: calc(254px + (100vw - 254px) / 2);
+    width: min(720px, calc(100vw - 254px - 48px));
+    padding: 12px 24px 22px;
+    translate: -50% 0;
+  }
+
+  .soul-sheet-scrim {
+    bottom: 0;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .soul-sheet,
+  .soul-sheet-scrim {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .soul-sheet {
+    background: #101f26;
+  }
+}

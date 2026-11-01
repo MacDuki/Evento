@@ -1,6 +1,6 @@
 ﻿import { CalendarDays, Check, CheckCircle2, ChevronDown, CircleDashed, CircleX, Maximize2, Minimize2, Palette, SlidersHorizontal, Sparkles, Target, Trophy, Waves, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ShinyText from "../../../components/effects/ShinyText.js";
 import { DateCompass } from "../../components/date-compass/DateCompass.js";
@@ -8,6 +8,7 @@ import { orbEffects, orbPalettes, orbVariants, statusLabels } from "../../consta
 import soulQuotes from "../../data/soul-quotes.json" with { type: "json" };
 import type { Cycle, OrbPalette, OrbSettings, SoulReaction, Soul as SoulType } from "../../types.js";
 import { formatDate, formatLongDate, formatLongDateParts, today } from "../../utils/dates.js";
+import { takeLoaderOrb } from "../../utils/loaderOrb.js";
 
 const exampleSoulQuotes = soulQuotes;
 const LAST_QUOTE_KEY = "en-calma-last-quote";
@@ -149,6 +150,28 @@ export function Soul({ soul, cycle, cleanDays, reaction, settings, onSettingsCha
       // La frase igual cambia durante la sesión.
     }
   }, [quoteIndex]);
+
+  useLayoutEffect(() => {
+    const orb = orbRef.current;
+    const from = takeLoaderOrb();
+    if (!orb || reduceMotion || orb.getAnimations().length) return;
+    const options = { duration: 1000, easing: "cubic-bezier(0.2, 0, 0, 1)", fill: "backwards" } as const;
+    const to = orb.getBoundingClientRect();
+    if (!from || !to.width) {
+      orb.animate([
+        { opacity: 0, transform: "translate3d(0, 12px, 0) scale(0.94)" },
+        { opacity: 1, transform: "translate3d(0, 0, 0) scale(1)" }
+      ], options);
+      return;
+    }
+    const scale = from.width / to.width;
+    const x = from.left + from.width / 2 - (to.left + to.width / 2);
+    const y = from.top + from.height / 2 - (to.top + to.height / 2);
+    orb.animate([
+      { transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})` },
+      { transform: "translate3d(0, 0, 0) scale(1)" }
+    ], options);
+  }, []);
 
   return <section className={`soul-stage ${expanded ? "is-expanded" : ""} select-none`} style={orbStyle}>
     <header className="soul-stage-header date-topbar">

@@ -1997,7 +1997,7 @@ body.soul-sheet-open.soul-sheet-closing .mobile-nav {
 }
 .loading-screen {
   min-height: 100dvh;
-  padding: 26px;
+  padding: max(26px, env(safe-area-inset-top)) 26px max(26px, env(safe-area-inset-bottom));
   background: #090a0d;
 }
 .loading-stage {
@@ -2894,5 +2894,46 @@ body.soul-sheet-open.soul-sheet-closing .mobile-nav {
   .soul-orb-box::before,
   .soul-orb-box::after {
     animation: none;
+  }
+}
+
+/* Entrada de la home: el orbe llega primero y el resto sube detrás, con la misma curva y pasos de 120 ms. */
+@keyframes home-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+}
+@keyframes home-glow {
+  from {
+    opacity: 0;
+  }
+}
+.soul-stage::before {
+  animation: home-glow 1.4s var(--ease) backwards;
+}
+.soul-stage-header.date-topbar {
+  animation: home-rise 0.6s var(--ease) 0.12s backwards;
+}
+.soul-quote {
+  animation: home-rise 0.7s var(--ease) 0.24s backwards;
+}
+.date-compass {
+  animation: home-rise 0.7s var(--ease) 0.36s backwards;
+}
+.mobile-nav {
+  animation: home-rise 0.6s var(--ease) 0.48s backwards;
+}
+.no-soul-state > * {
+  animation: home-rise 0.7s var(--ease) 0.12s backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .soul-stage::before,
+  .soul-stage-header.date-topbar,
+  .soul-quote,
+  .date-compass,
+  .mobile-nav,
+  .no-soul-state > * {
+    animation: home-glow 0.3s linear backwards;
   }
 }

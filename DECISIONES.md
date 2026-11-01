@@ -142,3 +142,11 @@ Registro de las decisiones acordadas para esta versión. Cada entrada explica qu
 **Motivo:** cada apertura esperaba a la red antes de dibujar nada. Con señal lenta o inestable la app quedaba en pantalla blanca todo ese tiempo, aunque sus archivos ya estuvieran en el teléfono. El estado vive en IndexedDB, así que abrir la app no necesita la red.
 
 **Descartado:** red primero sin límite de tiempo (comportamiento anterior) y red primero con timeout, que en cada apertura con señal regular sigue dependiendo de la red.
+
+## 18. Pantalla de inicio negra y entrada escalonada del home
+
+**Decisión:** en iPhone, la app instalada usa imágenes de inicio negras (`public/splash/`, `apple-touch-startup-image`) y barra de estado translúcida. El loader y el HTML inicial comparten las mismas clases, para que el orbe no cambie de lugar entre ambos. Al terminar la carga, el orbe del home se desplaza desde la posición del loader y los demás bloques suben en secuencia con la misma curva.
+
+**Motivo:** iOS muestra una pantalla de inicio blanca al abrir una app instalada cuando no hay imagen para ese modelo. Los saltos venían de que el orbe cambiaba de lugar entre loader y home, de que la brújula medía sus marcas después de pintar y de que todo el bloque aparecía de golpe. Las animaciones usan solo `transform` y `opacity`, que el navegador resuelve en el compositor, así que el bucle de la frase en el hilo principal las afecta menos.
+
+**Descartado:** animar la entrada con `motion` en JavaScript (`x`, `y`, `scale`), que compite con el hilo principal, y animar el contenedor completo, que mueve todo como un bloque.

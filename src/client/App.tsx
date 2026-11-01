@@ -13,6 +13,7 @@ import { Soul, SoulMemory } from "./pages/Soul/Soul.js";
 import * as localStore from "./services/localStore.js";
 import type { Contact, Cycle, OrbSettings, Soul as SoulType, SoulReaction, View } from "./types.js";
 import { formatDate, today } from "./utils/dates.js";
+import { rememberLoaderOrb } from "./utils/loaderOrb.js";
 
 export function App() {
   const [profileId, setProfileId] = useState("");
@@ -109,6 +110,7 @@ export function App() {
         setOnboarding(false);
         return;
       }
+      if (showSpinner && state.soul) rememberLoaderOrb(document.querySelector<HTMLElement>(".loading-orb")?.getBoundingClientRect() ?? null);
       localStorage.removeItem("userId");
       setProfileId(state.profileId);
       setSoul(state.soul);
@@ -464,7 +466,7 @@ export function App() {
       <div className="mobile-nav"><Navigation view={view} setView={setView} /></div>
       {stateError
         ? <section className="state-error" role="alert"><AlertTriangle aria-hidden="true" /><div><strong>No se pudo leer el almacenamiento local</strong><details><summary>Detalle</summary><span>{stateError}</span></details></div><button className="icon-action quiet-icon" type="button" title="Reintentar" aria-label="Reintentar" onClick={() => void load(true)}><RotateCcw aria-hidden="true" /></button></section>
-        : <AnimatePresence mode="wait"><motion.div key={view} className="view-content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .28, ease: [0.2, 0, 0, 1] }}>
+        : <AnimatePresence mode="wait"><motion.div key={view} className="view-content" initial={view === "dashboard" ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .28, ease: [0.2, 0, 0, 1] }}>
 
           {view === "dashboard" && <section className="dashboard">
             {activeSoul

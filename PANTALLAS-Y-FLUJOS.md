@@ -68,6 +68,8 @@ Ya no se pide una fecha final ni se crea el ciclo con un endpoint separado. La m
 
 Es la pantalla inicial. El protagonista es el orbe de la soul.
 
+Entrada: el orbe nace en la posición del loader y se desplaza a su lugar; después suben, en orden, la fecha, la frase, la brújula y la barra inferior, con la misma curva. Con `prefers-reduced-motion` solo cambian de opacidad.
+
 #### 3.1 Soul viva
 
 - Orbe animado con los días limpios.

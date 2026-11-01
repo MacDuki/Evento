@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { addCalendarDays, daysSince, localDate } from "../../../domain/dates.js";
 
 const VISIBLE_RADIUS = 15;
@@ -48,7 +48,7 @@ export function DateCompass({ cycleStartDate, onDateChange }: { cycleStartDate: 
     };
   }), [selectedOffset, todayDate]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = scaleRef.current;
     if (!element) return;
 

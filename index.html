@@ -8,6 +8,13 @@
     <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <title>En calma</title>
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #090a0d; }
+      .boot { display: grid; min-height: 100dvh; place-items: center; }
+      .boot-orb { display: block; width: 108px; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 31% 23%, #fff, #9699a2 45%, #282a31 73%); box-shadow: 0 0 48px rgba(226, 228, 234, .18); animation: boot-breathe 1.8s ease-in-out infinite; }
+      @keyframes boot-breathe { 50% { transform: scale(1.045); } }
+      @media (prefers-reduced-motion: reduce) { .boot-orb { animation: none; } }
+    </style>
   </head>
-  <body><div id="root"></div><script type="module" src="/src/client/main.tsx"></script></body>
+  <body><div id="root"><div class="boot" role="status" aria-label="Cargando"><span class="boot-orb"></span></div></div><script type="module" src="/src/client/main.tsx"></script></body>
 </html>

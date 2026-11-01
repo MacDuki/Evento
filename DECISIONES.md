@@ -134,3 +134,11 @@ Registro de las decisiones acordadas para esta versión. Cada entrada explica qu
 **Motivo:** los documentos describían la versión anterior (meta obligatoria, cierre por meta, endpoint `finish`, formulario de ciclos en el home) y habrían inducido a error a la próxima persona o IA que trabajara en el proyecto.
 
 **Alcance de pruebas:** pruebas unitarias de reglas y fechas, más `npm run build`. No se agregaron pruebas de endpoints.
+
+## 17. Apertura desde la copia local del shell
+
+**Decisión:** el service worker responde las navegaciones con el HTML guardado y actualiza esa copia, junto con los archivos que referencia, en segundo plano. Una respuesta de error de la red no reemplaza la copia guardada. `index.html` muestra un fondo oscuro y un orbe de carga antes de que cargue el JavaScript.
+
+**Motivo:** cada apertura esperaba a la red antes de dibujar nada. Con señal lenta o inestable la app quedaba en pantalla blanca todo ese tiempo, aunque sus archivos ya estuvieran en el teléfono. El estado vive en IndexedDB, así que abrir la app no necesita la red.
+
+**Descartado:** red primero sin límite de tiempo (comportamiento anterior) y red primero con timeout, que en cada apertura con señal regular sigue dependiendo de la red.

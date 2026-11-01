@@ -261,6 +261,7 @@ El cliente registra en `localStorage` las solicitudes mutantes que fallan por er
 - Si una solicitud reintentada vuelve a fallar, permanece en la cola.
 - El servidor sigue siendo la autoridad cuando la operación finalmente se procesa.
 - Las operaciones que dependen de un estado que pudo cambiar (por ejemplo, admitir consumo) pueden ser rechazadas al reintentarse; el cliente muestra el error del servidor.
+- La apertura usa la copia local del shell (HTML y archivos que referencia) del service worker en [`public/sw.js`](./public/sw.js): no espera a la red. Esa copia se actualiza en segundo plano y la versión nueva se usa en la siguiente apertura. Una respuesta de error de la red no reemplaza la copia.
 
 ## 13. Estados y transiciones
 
